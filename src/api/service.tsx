@@ -1,9 +1,9 @@
 // util/api.ts
 import axios from 'axios';
 import { getStoredToken, clearAuthData } from '../util/authController';
+import { APP_CONFIG } from '../config/appConfig';
 
-const base_url = 'https://api-dev.circleproof.com/api';
-// const base_url = "http://192.168.0.123:8000/api";
+const base_url = APP_CONFIG.API_BASE_URL;
 
 export const api = axios.create({
   baseURL: base_url,
