@@ -19,5 +19,7 @@ const DEV_API_URL = Platform.select({
 
 export const APP_CONFIG = {
   // Toggle between __DEV__ or your custom remote server
-  API_BASE_URL: __DEV__ ? DEV_API_URL : 'https://api.yourdomain.com/api',
+  API_BASE_URL: 'https://circle-proof-api-1.onrender.com/api',
+  REMOTE_API_URL: 'https://circle-proof-api-1.onrender.com/api',
+  DEV_API_URL: DEV_API_URL,
 };
