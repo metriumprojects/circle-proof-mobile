@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  Share,
+  Linking,
 } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -174,12 +176,14 @@ const VerificationStep2 = () => {
     | SkillItem
     | AspirationItem;
 
-  // Define interface for invitation items
   interface InvitationItem {
     id: number;
     email: string;
     customMessage: string;
     selectedSkills: SkillItem[];
+    sent?: boolean;
+    shareableLink?: string;
+    isGuest?: boolean;
   }
 
   const [invitations, setInvitations] = useState<InvitationItem[]>([
@@ -403,10 +407,13 @@ const VerificationStep2 = () => {
       });
 
       const response = await requestVerification({
-        validatorEmail: invitation.email,
+        validatorEmail: invitation.email.trim().toLowerCase(),
         customMessage: invitation.customMessage,
         items: items,
       });
+
+      const link = response.data?.data?.shareableLink;
+      const isGuest = response.data?.data?.isGuest;
 
       Toast.show({
         type: 'success',
@@ -415,15 +422,14 @@ const VerificationStep2 = () => {
       });
       console.log('Verification request response:', response.data);
 
-      // Clear the invitation fields after successful API call
       setInvitations(prev =>
         prev.map(inv => {
           if (inv.id === invitationId) {
             return {
               ...inv,
-              email: '',
-              customMessage: '',
-              selectedSkills: [],
+              sent: true,
+              shareableLink: link,
+              isGuest: isGuest,
             };
           }
           return inv;
@@ -565,23 +571,51 @@ const VerificationStep2 = () => {
     }
   };
 
-  const sendAllInvitations = () => {
-    const validInvitations = invitations.filter(inv => inv.email.trim());
+  const copyInvitationLink = (link?: string) => {
+    if (!link) {
+      Toast.show({
+        type: 'info',
+        text1: 'Notice',
+        text2: 'Send the verification request first to generate a link.',
+      });
+      return;
+    }
+    Share.share({
+      title: 'CircleProof Verification',
+      message: `Hi, please verify my experience on CircleProof: ${link}`,
+      url: link,
+    });
+  };
+
+  const shareOnWhatsApp = (link?: string) => {
+    if (!link) {
+      Toast.show({
+        type: 'info',
+        text1: 'Notice',
+        text2: 'Send the verification request first to generate a link.',
+      });
+      return;
+    }
+    const text = `Hi! Could you please verify my experience on CircleProof? Here is your verification link: ${link}`;
+    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`).catch(() => {
+      Share.share({ message: text });
+    });
+  };
+
+  const sendAllInvitations = async () => {
+    const validInvitations = invitations.filter(inv => inv.email.trim() && !inv.sent);
     if (validInvitations.length === 0) {
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please enter at least one email address',
+        type: 'info',
+        text1: 'Notice',
+        text2: 'Please enter an email address for unsent invitations',
       });
       return;
     }
 
-    Toast.show({
-      type: 'success',
-      text1: 'Success',
-      text2: `${validInvitations.length} invitation(s) sent successfully!`,
-    });
-    // Here you would implement the actual sending logic
+    for (const inv of validInvitations) {
+      await sendInvitation(inv.id);
+    }
   };
 
   const renderSelectedItem = () => {
@@ -934,17 +968,73 @@ const VerificationStep2 = () => {
         {/* Render selected skills as badges for this invitation */}
         {renderSelectedSkills(currentSelectedSkills, invitation.id)}
 
-        <TouchableOpacity
-          style={styles.sendButton}
-          onPress={() => sendInvitation(invitation.id)}
-          disabled={loadingStates[invitation.id]}
-        >
-          {loadingStates[invitation.id] ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.sendButtonText}>Send</Text>
-          )}
-        </TouchableOpacity>
+        {invitation.sent ? (
+          <View style={{ marginTop: 12, gap: 8 }}>
+            <View
+              style={{
+                backgroundColor: '#ecfdf5',
+                borderColor: '#a7f3d0',
+                borderWidth: 1,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 24,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#059669', fontWeight: '700', fontSize: 14 }}>
+                ✓ Verification Request Sent
+              </Text>
+            </View>
+
+            {invitation.shareableLink && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#f2f4f7',
+                    borderWidth: 1,
+                    borderColor: '#eaecf0',
+                    paddingVertical: 10,
+                    borderRadius: 24,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => copyInvitationLink(invitation.shareableLink)}
+                >
+                  <Text style={{ color: '#344054', fontWeight: '600', fontSize: 13 }}>
+                    📋 Copy Link
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#25D366',
+                    paddingVertical: 10,
+                    borderRadius: 24,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => shareOnWhatsApp(invitation.shareableLink)}
+                >
+                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
+                    💬 WhatsApp
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.sendButton}
+            onPress={() => sendInvitation(invitation.id)}
+            disabled={loadingStates[invitation.id]}
+          >
+            {loadingStates[invitation.id] ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.sendButtonText}>Send</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     );
   };

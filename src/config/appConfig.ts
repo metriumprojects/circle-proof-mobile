@@ -22,4 +22,5 @@ export const APP_CONFIG = {
   API_BASE_URL: 'https://circle-proof-api-1.onrender.com/api',
   REMOTE_API_URL: 'https://circle-proof-api-1.onrender.com/api',
   DEV_API_URL: DEV_API_URL,
+  CLERK_PUBLISHABLE_KEY: 'pk_test_cHJvLXlldGktMTk5Ny5jbGVyay5hY2NvdW50cy5kZXYk',
 };

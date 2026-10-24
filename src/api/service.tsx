@@ -334,31 +334,66 @@ export const requestVerification = (data: any) => {
 };
 
 export const receivedVerificationRequest = (type?: string) => {
-  let url = '/positions/validation-requests/received';
+  let url = '/validations/requests/received';
   if (type) {
-    url += `?type=${type}`;
+    url += `?status=${type}`;
   }
   return api.get(url);
 };
 
-export const validationRequest = (requestId: number, data: any) => {
-  console.log(requestId, 'request id', data, 'data');
-  return api.post(`/validations/requests/${requestId}/process`, data);
+export const validationRequest = (
+  requestId: number | string,
+  itemIdOrData: any,
+  maybeData?: any,
+) => {
+  // If third argument is provided, format is (requestId, itemId, data)
+  if (maybeData !== undefined) {
+    return api.post(
+      `/validations/requests/${requestId}/items/${itemIdOrData}/process`,
+      maybeData,
+    );
+  }
+  // Fallback if called as (requestId, data)
+  return api.post(`/validations/requests/${requestId}/process`, itemIdOrData);
 };
 
-export const checkCompanyPosition = (companyId: number) => {
+export const checkCompanyPosition = (companyId: number | string) => {
   console.log(companyId, 'company id');
   return api.get(`/positions/check-company/${companyId}`);
 };
 
-export const confirmVerificationRequest = (requestId: number, data: any) => {
-  console.log(requestId, 'confirm request id', data, 'data');
-  return api.post(`/validations/requests/${requestId}/confirm`, data);
+export const confirmVerificationRequest = (
+  requestId: number | string,
+  itemIdOrData: any,
+  maybeData?: any,
+) => {
+  if (maybeData !== undefined) {
+    return api.post(
+      `/validations/requests/${requestId}/items/${itemIdOrData}/confirm`,
+      maybeData,
+    );
+  }
+  return api.post(`/validations/requests/${requestId}/confirm`, itemIdOrData);
 };
 
-export const cancelVerificationRequest = (requestId: number) => {
-  console.log(requestId, 'decline request id');
+export const cancelVerificationRequest = (
+  requestId: number | string,
+  itemId?: number | string,
+) => {
+  if (itemId) {
+    return api.post(
+      `/validations/requests/${requestId}/items/${itemId}/cancel`,
+      {},
+    );
+  }
   return api.post(`/validations/requests/${requestId}/cancel`, {});
+};
+
+export const getValidationOptions = (
+  requestId: number | string,
+  itemId: number | string,
+) => {
+  return api.get(`/validations/requests/${requestId}/items/${itemId}/options`);
 };
 
 export const toggleTimelineCommentLike = (commentId: number) => {

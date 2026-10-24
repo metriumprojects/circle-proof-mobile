@@ -164,7 +164,7 @@ const AddModal: React.FC<AddModalProps> = ({
               >
                 <Image
                   source={require('../../assets/icons/close.png')}
-                  style={{ width: 24, height: 24 }}
+                  style={{ width: 14, height: 14, tintColor: '#667085' }}
                 />
               </TouchableOpacity>
             </View>
@@ -358,7 +358,12 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   closeButton: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     padding: 16,

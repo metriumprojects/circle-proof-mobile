@@ -1029,11 +1029,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginLeft: 8, // Avatar appears after the message in the row for current user
   },
-  messageTime: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
   senderMessageTime: {
     fontSize: 12,
     color: '#999',

@@ -17,6 +17,7 @@ import Toast from 'react-native-toast-message';
 import { Formik, FormikHelpers } from 'formik';
 import * as Yup from 'yup';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useSignUp } from '@clerk/clerk-expo';
 import { signUp } from '../../api/service';
 import { useAuth } from '../../context/AuthContext';
 
@@ -32,6 +33,7 @@ const SignupScreen: React.FC = () => {
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [secureConfirmTextEntry, setSecureConfirmTextEntry] = useState(true);
   const { login } = useAuth();
+  const { isLoaded: isClerkLoaded, signUp: clerkSignUp, setActive } = useSignUp();
 
   const signupSchema = Yup.object().shape({
     name: Yup.string()
@@ -59,8 +61,45 @@ const SignupScreen: React.FC = () => {
   ) => {
     console.log('[SignupScreen] Starting signup process with values:', values);
 
+    // 1. First attempt Clerk registration (matches web auth)
+    if (isClerkLoaded && clerkSignUp) {
+      try {
+        console.log('[SignupScreen] Creating Clerk account...');
+        const nameParts = values.name.trim().split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        const signUpAttempt = await clerkSignUp.create({
+          emailAddress: values.email.trim(),
+          password: values.password,
+          firstName,
+          lastName,
+        });
+
+        if (signUpAttempt.status === 'complete') {
+          console.log('[SignupScreen] Clerk signup complete, activating session...');
+          await setActive({ session: signUpAttempt.createdSessionId });
+          Toast.show({
+            type: 'success',
+            text1: 'Welcome!',
+            text2: 'Account created successfully!',
+          });
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          });
+          return;
+        }
+      } catch (clerkErr: any) {
+        console.warn(
+          '[SignupScreen] Clerk signup attempt error, falling back to direct API:',
+          clerkErr?.errors?.[0]?.message || clerkErr?.message,
+        );
+      }
+    }
+
+    // 2. Fallback to direct backend API
     try {
-      // Call the signup API
       const signupData = {
         fullName: values.name,
         email: values.email,
@@ -71,8 +110,6 @@ const SignupScreen: React.FC = () => {
       const response = await signUp(signupData);
       console.log('[SignupScreen] API response received:', response.data);
 
-      // Navigate to login screen after successful signup without extracting token
-      console.log('[SignupScreen] Navigating to Login screen');
       navigation.navigate('Login');
 
       Toast.show({
@@ -84,10 +121,8 @@ const SignupScreen: React.FC = () => {
       console.error('[SignupScreen] Signup error:', error);
       let errorMessage = 'An error occurred during signup';
 
-      if (error.response) {
-        // Server responded with error status
-        errorMessage = error.response.data.error || errorMessage;
-
+      if (error.response?.data?.error || error.response?.data?.message) {
+        errorMessage = error.response.data.error || error.response.data.message;
       }
 
       Toast.show({
@@ -296,13 +331,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    fontWeight: '700',
+    color: '#191C1F',
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#777',
+    fontSize: 15,
+    color: '#667085',
   },
   formContainer: {
     marginBottom: 20,
@@ -311,10 +346,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#000000',
-    borderRadius: 10,
+    borderColor: '#eaecf0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
     paddingHorizontal: 15,
-    marginBottom: 20,
+    marginBottom: 16,
     height: 50,
   },
   inputIcon: {
@@ -323,55 +359,55 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    color: '#333',
-    fontSize: 16,
+    color: '#191C1F',
+    fontSize: 15,
   },
   eyeIcon: {
     padding: 10,
   },
   eyeIconImage: {
-    width: 24,
-    height: 24,
-    tintColor: '#777',
+    width: 22,
+    height: 22,
+    tintColor: '#667085',
   },
   errorText: {
-    color: '#ff3333',
+    color: '#ff0031',
     fontSize: 12,
     marginBottom: 10,
-    marginLeft: 10,
+    marginLeft: 6,
   },
   signupButton: {
     backgroundColor: '#57B915',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 9999,
+    paddingVertical: 14,
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 20,
   },
   signupButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '600',
   },
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
   },
   loginText: {
-    color: '#666',
+    color: '#667085',
     fontSize: 14,
   },
   loginLink: {
-    color: '#4a90e2',
+    color: '#57B915',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   termsContainer: {
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   termsText: {
-    color: '#777',
+    color: '#667085',
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

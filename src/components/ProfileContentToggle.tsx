@@ -222,78 +222,87 @@ const ProfileContentToggle: React.FC<ProfileContentToggleProps> = ({
   );
 };
 
+import { THEME } from '../config/theme';
+
 const styles = StyleSheet.create({
   container: {
     marginTop: 10,
   },
   socialScrollContainer: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     gap: 8,
     marginTop: 6,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   socialButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: THEME.radius.full,
     borderWidth: 1,
-    borderColor: '#000000',
-    minWidth: 120,
-    backgroundColor: 'transparent',
+    borderColor: THEME.colors.brandGreyTwo,
+    minWidth: 105,
+    backgroundColor: THEME.colors.brandGreyOne,
   },
   activeSocialButton: {
-    backgroundColor: '#67C40C',
-    borderColor: '#10B981',
+    backgroundColor: THEME.colors.white,
+    borderColor: THEME.colors.brandInk,
+    borderWidth: 1.5,
+    shadowColor: THEME.colors.brandInk,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   feedIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 8,
-    tintColor: '#000000', // Add default color for normal state
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: THEME.colors.brandGreyThree,
   },
   timelineIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 8,
-    tintColor: '#000000', // Add default color for normal state
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: THEME.colors.brandGreyThree,
   },
   aspirationsIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 8,
-    tintColor: '#000000', // Add default color for normal state
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: THEME.colors.brandGreyThree,
   },
   hobbyIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 8,
-    tintColor: '#000000', // Add default color for normal state
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: THEME.colors.brandGreyThree,
   },
   skillsIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 8,
-    tintColor: '#000000', // Add default color for normal state
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: THEME.colors.brandGreyThree,
   },
   educationIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 8,
-    tintColor: '#000000', // Add default color for normal state
+    width: 15,
+    height: 15,
+    marginRight: 6,
+    tintColor: THEME.colors.brandGreyThree,
   },
   activeIcon: {
-    tintColor: 'white',
+    tintColor: THEME.colors.brandInk,
   },
   socialText: {
-    fontSize: 14,
-    color: '#000000',
+    fontSize: 13,
+    color: THEME.colors.brandGreyThree,
+    fontWeight: '500',
   },
   activeSocialText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: THEME.colors.brandInk,
+    fontWeight: '700',
   },
   contentContainer: {
     flex: 1,

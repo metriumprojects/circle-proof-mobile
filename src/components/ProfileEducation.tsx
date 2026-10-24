@@ -2370,15 +2370,15 @@ const styles = StyleSheet.create({
   // New Card & Badge Styles
   achievementCardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: moderateScale(10),
-    padding: moderateScale(12),
+    borderRadius: moderateScale(16),
+    padding: moderateScale(14),
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
+    borderColor: '#eaecf0',
+    shadowColor: '#101828',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 1,
     marginBottom: verticalScale(10),
   },
   achievementCardHeader: {

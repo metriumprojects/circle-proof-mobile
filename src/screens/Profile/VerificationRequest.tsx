@@ -17,6 +17,7 @@ import {
   receivedVerificationRequest,
   validationRequest,
   checkCompanyPosition,
+  cancelVerificationRequest,
 } from '../../api/service';
 
 // Define the stack navigator params
@@ -29,11 +30,13 @@ type RootStackParamList = {
   VerificationStep2: undefined;
   VerificationRequest: undefined;
   VerifcationConfirmation: { 
-    requestId?: number; 
+    requestId?: number | string; 
+    itemId?: number | string;
     hasPosition?: boolean;
     userPosition?: any;
     requesterName?: string;
     positionData?: any;
+    itemData?: any;
   };
 };
 
@@ -133,12 +136,81 @@ const VerificationRequest = () => {
   const fetchRequests = useCallback(async (type: TabType) => {
     try {
       const response = await receivedVerificationRequest(type);
-      const apiResponse: ApiResponse = response.data;
-      console.log(apiResponse.data, 'api response for', type);
-      return apiResponse.data.validationRequests;
+      const apiResponse = response.data;
+      const rawData = apiResponse?.data;
+      console.log(rawData, 'api response for', type);
+
+      const statusMap: Record<TabType, string> = {
+        pending: 'pending',
+        in_progress: 'in_progress',
+        accepted: 'verified',
+        rejected: 'rejected',
+      };
+      const targetStatus = statusMap[type];
+
+      if (rawData?.requesterGroups) {
+        const itemsList: any[] = [];
+        rawData.requesterGroups.forEach((group: any) => {
+          const requester = group.requester || {};
+          (group.requests || []).forEach((req: any) => {
+            (req.items || []).forEach((item: any) => {
+              if (item.status === targetStatus) {
+                const details = item.details || {};
+                let dateRange = details.dateRange;
+                if (!dateRange && (details.startYear || details.endYear)) {
+                  const start = details.startMonth
+                    ? `${details.startMonth}/${details.startYear}`
+                    : details.startYear;
+                  const end = details.endYear
+                    ? `${details.endMonth ? `${details.endMonth}/` : ''}${details.endYear}`
+                    : 'Present';
+                  dateRange = `${start} - ${end}`;
+                }
+
+                itemsList.push({
+                  id: item.id,
+                  itemId: item.id,
+                  requestId: req.id,
+                  status: item.status,
+                  createdAt: req.createdAt,
+                  formattedRequestDate: req.createdAt
+                    ? new Date(req.createdAt).toLocaleDateString()
+                    : '',
+                  requester: {
+                    id: requester._id || requester.id,
+                    fullName: requester.fullName || requester.name || 'Peer',
+                    profilePicture: requester.profilePicture,
+                  },
+                  position: {
+                    id: item.itemId,
+                    title: details.title || details.degree || item.itemType,
+                    description:
+                      details.description || details.fieldOfStudy || '',
+                    formattedDateRange: dateRange || '',
+                    company: {
+                      id: details.companyId || details.schoolId || 0,
+                      name: details.company || details.school || item.itemType,
+                      logo: details.companyLogo || details.schoolLogo || '',
+                    },
+                    type: item.itemType,
+                  },
+                  rawItem: item,
+                });
+              }
+            });
+          });
+        });
+        return itemsList;
+      }
+
+      if (rawData?.validationRequests) {
+        return rawData.validationRequests;
+      }
+
+      return [];
     } catch (err: any) {
       console.error(`Error fetching ${type} verification requests:`, err);
-      throw err;
+      return [];
     }
   }, []);
 
@@ -230,100 +302,113 @@ const VerificationRequest = () => {
     // Data will be fetched in the useEffect if not already loaded
   };
 
-   const handleValidate = async (id: number) => {
-    setLoadingButtons(prev => ({ ...prev, validate: id }));
+  const handleValidate = async (id: number | string) => {
+    setLoadingButtons(prev => ({ ...prev, validate: id as any }));
     try {
-      const response = await validationRequest(id, { action: 'validate' });
-      console.log('Validation response:', response);
+      const currentRequests = requests[activeTab] as any[];
+      const verificationRequest = currentRequests.find(req => req.id === id);
+      const requestId = verificationRequest?.requestId || id;
+      const itemId = verificationRequest?.id || id;
 
-      // Show toast first
+      await validationRequest(requestId, itemId, { action: 'validate' });
+
       Toast.show({
         type: 'success',
         text1: 'Success',
         text2: 'Request validated successfully',
       });
 
-      // Get the verification request to access the company ID
-      const currentRequests = requests[activeTab];
-      const verificationRequest = currentRequests.find(req => req.id === id);
-      
-      if (verificationRequest) {
-        // Check if user has a position at the same company
-        const companyId = verificationRequest.position.company.id;
-        const positionCheckResponse = await checkCompanyPosition(companyId);
-        console.log(positionCheckResponse,"position response check")
-        const hasPosition = positionCheckResponse.data.data.hasPosition;
-        const userPosition = positionCheckResponse.data.data.userPosition;
+      let hasPosition = false;
+      let userPosition = null;
 
-      // Refresh the current tab data
-      await fetchTabData(activeTab, true);
-      navigation.navigate('VerifcationConfirmation', { 
-        requestId: id, 
-        hasPosition: hasPosition,
-        userPosition: userPosition,
-        requesterName: verificationRequest.requester.fullName,
-        positionData: verificationRequest.position
-      });
-      } else {
-        // If we can't find the request, navigate without position check
-        navigation.navigate('VerifcationConfirmation', { requestId: id });
+      if (verificationRequest?.position?.company?.id) {
+        try {
+          const positionCheckResponse = await checkCompanyPosition(
+            verificationRequest.position.company.id,
+          );
+          hasPosition = positionCheckResponse.data?.data?.hasPosition;
+          userPosition = positionCheckResponse.data?.data?.userPosition;
+        } catch (_) {}
       }
-    } catch (error) {
+
+      await fetchTabData(activeTab, true);
+      navigation.navigate('VerifcationConfirmation', {
+        requestId,
+        itemId,
+        hasPosition,
+        userPosition,
+        requesterName: verificationRequest?.requester?.fullName,
+        positionData: verificationRequest?.position,
+        itemData: verificationRequest?.rawItem,
+      });
+    } catch (error: any) {
       console.error('Validation error:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to validate request. Please try again.',
+        text2:
+          error.response?.data?.message ||
+          'Failed to validate request. Please try again.',
       });
     } finally {
       setLoadingButtons(prev => ({ ...prev, validate: null }));
     }
   };
 
-  const handleContinue = async (id: number) => {
-    setLoadingButtons(prev => ({ ...prev, validate: id }));
+  const handleContinue = async (id: number | string) => {
+    setLoadingButtons(prev => ({ ...prev, validate: id as any }));
     try {
-      // Get the verification request to access the company ID
-      const currentRequests = requests[activeTab];
+      const currentRequests = requests[activeTab] as any[];
       const verificationRequest = currentRequests.find(req => req.id === id);
-      
-      if (verificationRequest) {
-        // Check if user has a position at the same company
-        const companyId = verificationRequest.position.company.id;
-        const positionCheckResponse = await checkCompanyPosition(companyId);
-        const hasPosition = positionCheckResponse.data.data.hasPosition;
-        const userPosition = positionCheckResponse.data.data.userPosition;
+      const requestId = verificationRequest?.requestId || id;
+      const itemId = verificationRequest?.id || id;
 
-        // Refresh the current tab data
-        await fetchTabData(activeTab, true);
-        navigation.navigate('VerifcationConfirmation', { 
-          requestId: id, 
-          hasPosition: hasPosition,
-          userPosition: userPosition,
-          requesterName: verificationRequest.requester.fullName,
-          positionData: verificationRequest.position
-        });
-      } else {
-        // If we can't find the request, navigate without position check
-        navigation.navigate('VerifcationConfirmation', { requestId: id });
+      let hasPosition = false;
+      let userPosition = null;
+
+      if (verificationRequest?.position?.company?.id) {
+        try {
+          const positionCheckResponse = await checkCompanyPosition(
+            verificationRequest.position.company.id,
+          );
+          hasPosition = positionCheckResponse.data?.data?.hasPosition;
+          userPosition = positionCheckResponse.data?.data?.userPosition;
+        } catch (_) {}
       }
-    } catch (error) {
+
+      await fetchTabData(activeTab, true);
+      navigation.navigate('VerifcationConfirmation', {
+        requestId,
+        itemId,
+        hasPosition,
+        userPosition,
+        requesterName: verificationRequest?.requester?.fullName,
+        positionData: verificationRequest?.position,
+        itemData: verificationRequest?.rawItem,
+      });
+    } catch (error: any) {
       console.error('Continue error:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to continue request. Please try again.',
+        text2:
+          error.response?.data?.message ||
+          'Failed to continue request. Please try again.',
       });
     } finally {
       setLoadingButtons(prev => ({ ...prev, validate: null }));
     }
   };
 
-  const handleDecline = async (id: number) => {
-    setLoadingButtons(prev => ({ ...prev, decline: id }));
+  const handleDecline = async (id: number | string) => {
+    setLoadingButtons(prev => ({ ...prev, decline: id as any }));
     try {
-      const response = await validationRequest(id, { action: 'decline' });
-      console.log('Decline response:', response);
+      const currentRequests = requests[activeTab] as any[];
+      const verificationRequest = currentRequests.find(req => req.id === id);
+      const requestId = verificationRequest?.requestId || id;
+      const itemId = verificationRequest?.id || id;
+
+      await cancelVerificationRequest(requestId, itemId);
 
       Toast.show({
         type: 'success',
@@ -333,12 +418,14 @@ const VerificationRequest = () => {
 
       // Refresh the current tab after decline
       await fetchTabData(activeTab, true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Decline error:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to decline request. Please try again.',
+        text2:
+          error.response?.data?.message ||
+          'Failed to decline request. Please try again.',
       });
     } finally {
       setLoadingButtons(prev => ({ ...prev, decline: null }));
@@ -516,11 +603,14 @@ const VerificationRequest = () => {
   );
 
   const renderRequestsContent = () => {
+    const currentTabRequests = requests[activeTab] || [];
+    const groupedRequests = groupRequestsByRequester(currentTabRequests);
+
     if (Object.keys(groupedRequests).length === 0) {
       return (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
-            No {activeTab} verification requests found
+            No {activeTab.replace('_', ' ')} verification requests found
           </Text>
           {!tabLoading[activeTab] && (
             <TouchableOpacity
@@ -535,20 +625,13 @@ const VerificationRequest = () => {
     }
 
     // Show grouped layout for pending, in_progress, accepted and rejected tabs
-    if (activeTab === 'pending' || activeTab === 'in_progress' || activeTab === 'accepted' || activeTab === 'rejected') {
-      return Object.entries(groupedRequests).map(
-        ([requesterId, requesterRequests]) => {
-          const requester = requesterRequests[0].requester;
-          return renderRequesterGroup(requester, requesterRequests);
-        },
-      );
-    }
-
-    // Show flat list for other tabs if any
-    return requests[activeTab].map(renderPositionCard);
+    return Object.entries(groupedRequests).map(
+      ([requesterId, requesterRequests]) => {
+        const requester = requesterRequests[0].requester;
+        return renderRequesterGroup(requester, requesterRequests);
+      },
+    );
   };
-
-  const groupedRequests = groupRequestsByRequester(requests[activeTab]);
 
   const renderTabButton = (tab: TabType, label: string) => (
     <TouchableOpacity
@@ -745,12 +828,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     margin: 16,
     padding: 16,
-    borderRadius: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eaecf0',
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
     marginBottom: 16,
   },
   companyHeader: {
@@ -803,26 +888,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#57B915',
     paddingVertical: 12,
-    borderRadius: 6,
+    borderRadius: 9999,
     alignItems: 'center',
   },
   validateButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   declineButton: {
     flex: 1,
     backgroundColor: '#fff',
     paddingVertical: 12,
-    borderRadius: 6,
+    borderRadius: 9999,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#eaecf0',
   },
   declineButtonText: {
-    color: '#333',
-    fontSize: 15,
+    color: '#344054',
+    fontSize: 14,
     fontWeight: '600',
   },
   backIcon: {
@@ -883,45 +968,51 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     padding: 16,
-    borderRadius: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eaecf0',
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
     marginBottom: 16,
   },
   requesterGroup: {
     backgroundColor: '#fff',
     margin: 16,
-    borderRadius: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eaecf0',
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
     marginBottom: 16,
   },
   positionsContainer: {
-    paddingTop: 10,
+    paddingTop: 4,
   },
   notificationContent: {
     flex: 1,
   },
   requesterInfo: {
     fontSize: 12,
-    color: '#666',
+    color: '#667085',
   },
   requesterGroupContainer: {
-    // margin: 16,
-    borderRadius: 2,
+    borderRadius: 16,
+    marginBottom: 12,
   },
   requesterCard: {
     backgroundColor: '#ffffff',
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
     padding: 16,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eaecf0',
   },
   requesterInfoContainer: {
     flexDirection: 'row',

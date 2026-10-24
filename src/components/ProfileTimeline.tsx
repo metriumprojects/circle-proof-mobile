@@ -2332,8 +2332,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     paddingHorizontal: moderateScale(12),
     paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(6),
-    // marginRight: moderateScale(4), // Small space between icon and count
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
   },
 
   // Like count container - opens modal
@@ -2343,7 +2344,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     paddingHorizontal: moderateScale(12),
     paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(6),
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
   },
 
   // Comment container - single container for both icon and count
@@ -2353,7 +2356,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     paddingHorizontal: moderateScale(12),
     paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(6),
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
   },
   addcommentContainer: {
     flexDirection: 'row',
@@ -2361,8 +2366,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     paddingHorizontal: moderateScale(12),
     paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(6),
-    marginLeft: moderateScale(14),
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
+    marginLeft: moderateScale(10),
   },
 
   statIcon: {
@@ -2397,20 +2404,20 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(12),
   },
   verificationCard: {
-    backgroundColor: '#E9EAEE',
-    borderRadius: moderateScale(8),
-    padding: moderateScale(12),
+    backgroundColor: '#ffffff',
+    borderRadius: moderateScale(16),
+    padding: moderateScale(14),
     marginBottom: verticalScale(12),
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
+    borderColor: '#eaecf0',
+    shadowColor: '#101828',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   verifiedProfile: {
     flexDirection: 'row',
@@ -2682,15 +2689,15 @@ const styles = StyleSheet.create({
   // Achievement Card Styles
   achievementCardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: moderateScale(10),
-    padding: moderateScale(12),
+    borderRadius: moderateScale(16),
+    padding: moderateScale(14),
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
+    borderColor: '#eaecf0',
+    shadowColor: '#101828',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 1,
     marginBottom: verticalScale(10),
   },
   achievementCardHeader: {

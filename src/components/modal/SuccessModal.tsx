@@ -528,8 +528,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   closeButton: {
-    padding: 4,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBody: {
     padding: 16,

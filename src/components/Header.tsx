@@ -373,12 +373,7 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <View style={headerStyles.containerWithBottomTitle}>
-      <LinearGradient
-        colors={['#ffffff', '#f8f9fa']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={headerStyles.topContainer}
-      >
+      <View style={headerStyles.topContainer}>
         {showSearchBar ? (
           // Change the search container back to View but with proper touch handling:
           <View
@@ -441,7 +436,7 @@ const Header: React.FC<HeaderProps> = ({
         ) : (
           <View style={headerStyles.placeholder} />
         )}
-      </LinearGradient>
+      </View>
       <Text style={headerStyles.title}>{title}</Text>
       {/* Search Results Modal */}
       {shouldShowModal && (
@@ -500,12 +495,12 @@ const headerStyles = StyleSheet.create({
     paddingTop:
       Platform.OS === 'android' ? verticalScale(15) : verticalScale(40),
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eaecf0',
   },
   title: {
-    fontSize: moderateScale(18),
-    fontWeight: 'bold',
-    color: '#000',
+    fontSize: moderateScale(17),
+    fontWeight: '700',
+    color: '#191C1F',
     flex: 1,
     textAlign: 'center',
   },
@@ -524,10 +519,12 @@ const headerStyles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: moderateScale(20),
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: verticalScale(8),
+    backgroundColor: '#f5f5f5',
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
+    paddingHorizontal: moderateScale(14),
+    paddingVertical: verticalScale(7),
     flex: 1,
     marginRight: moderateScale(12),
     zIndex: 10,
@@ -583,7 +580,7 @@ const headerStyles = StyleSheet.create({
     paddingTop:
       Platform.OS === 'android' ? verticalScale(15) : verticalScale(40),
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eaecf0',
   },
   topContainer: {
     flexDirection: 'row',

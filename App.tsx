@@ -25,6 +25,9 @@ import CompaniesScreen from './src/screens/Profile/CompaniesScreen';
 import PDFViewer from './src/screens/PDFViewer/PDFViewer';
 import { StatusBar } from 'react-native';
 import VerifcationConfirmation from './src/screens/Profile/VerifcationConfirmation';
+import { ClerkProvider } from '@clerk/clerk-expo';
+import { tokenCache } from './src/util/tokenCache';
+import { APP_CONFIG } from './src/config/appConfig';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import Toast from 'react-native-toast-message';
@@ -190,18 +193,23 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="transparent"
-          translucent={true}
-        />
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
-        <Toast config={toastConfig} />
-      </NotificationProvider>
-    </AuthProvider>
+    <ClerkProvider
+      publishableKey={APP_CONFIG.CLERK_PUBLISHABLE_KEY}
+      tokenCache={tokenCache}
+    >
+      <AuthProvider>
+        <NotificationProvider>
+          <StatusBar
+            barStyle="dark-content"
+            backgroundColor="transparent"
+            translucent={true}
+          />
+          <NavigationContainer>
+            <AppNavigator />
+          </NavigationContainer>
+          <Toast config={toastConfig} />
+        </NotificationProvider>
+      </AuthProvider>
+    </ClerkProvider>
   );
 }

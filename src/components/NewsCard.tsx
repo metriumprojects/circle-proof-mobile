@@ -729,10 +729,10 @@ const NewsCard: React.FC<NewsCardProps> = ({
       <View style={cardStyles.content}>{renderDescription()}</View>
 
       <View style={cardStyles.actions}>
-        <View style={cardStyles.likeContainer}>
+        <View style={cardStyles.likePill}>
           <TouchableOpacity
-            style={cardStyles.actionButton}
             onPress={handleLike}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
           >
             <Image
               source={
@@ -740,34 +740,38 @@ const NewsCard: React.FC<NewsCardProps> = ({
                   ? require('../assets/icons/like2.png')
                   : require('../assets/icons/like1.png')
               }
-              style={cardStyles.actionIcon}
+              style={[
+                cardStyles.actionIcon,
+                isLiked && { tintColor: '#ff0031' },
+              ]}
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={cardStyles.actionButton}
             onPress={() => setLikesModalVisible(true)}
           >
-            <Text style={cardStyles.actionText}>{likeCount} likes</Text>
+            <Text style={cardStyles.actionText}>
+              {likeCount} {likeCount === 1 ? 'Like' : 'Likes'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Updated comment button to open CommentsModal */}
         <TouchableOpacity
           style={cardStyles.actionButton}
           onPress={async () => {
             await fetchComments();
             setCommentsModalVisible(true);
-            setIsAddingComment(true); // Always show input field in modal
+            setIsAddingComment(true);
           }}
         >
           <Image
             source={require('../assets/icons/comment.png')}
             style={cardStyles.actionIcon}
           />
-          <Text style={cardStyles.actionText}>{commentCount} Comments</Text>
+          <Text style={cardStyles.actionText}>
+            {commentCount} {commentCount === 1 ? 'Comment' : 'Comments'}
+          </Text>
         </TouchableOpacity>
       </View>
-      <View style={cardStyles.divider}></View>
 
       {/* Existing LikesModal */}
       <LikesModal
@@ -805,10 +809,17 @@ export default NewsCard;
 const cardStyles = StyleSheet.create({
   container: {
     backgroundColor: '#ffffff',
-    marginHorizontal: moderateScale(10),
-    marginVertical: verticalScale(8),
-    borderRadius: moderateScale(12),
-    padding: moderateScale(10),
+    marginHorizontal: moderateScale(12),
+    marginVertical: verticalScale(6),
+    borderRadius: moderateScale(16),
+    borderWidth: 1,
+    borderColor: '#eaecf0',
+    padding: moderateScale(16),
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   header: {
     flexDirection: 'row',
@@ -868,19 +879,19 @@ const cardStyles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
   },
   authorName: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(15),
     fontWeight: '600',
-    color: '#000',
+    color: '#191C1F',
     marginRight: moderateScale(4),
   },
   designation: {
     fontSize: moderateScale(12),
-    color: '#666',
+    color: '#667085',
     marginBottom: verticalScale(2),
   },
   timeAgo: {
     fontSize: moderateScale(12),
-    color: '#666',
+    color: '#667085',
   },
   imageContainer: {
     marginBottom: verticalScale(12),
@@ -949,31 +960,40 @@ const cardStyles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    gap: moderateScale(12),
-    paddingTop: verticalScale(8),
+    gap: moderateScale(10),
+    paddingTop: verticalScale(10),
   },
-  likeContainer: {
+  likePill: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: moderateScale(14),
+    paddingVertical: verticalScale(7),
+    backgroundColor: '#F5F5F5',
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
+    gap: moderateScale(6),
   },
   actionButton: {
     flexDirection: 'row',
-    paddingHorizontal: moderateScale(8),
-    paddingVertical: verticalScale(4),
-    backgroundColor: '#F5F5F5',
     alignItems: 'center',
-    borderRadius: moderateScale(4),
+    paddingHorizontal: moderateScale(14),
+    paddingVertical: verticalScale(7),
+    backgroundColor: '#F5F5F5',
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e9eaee',
+    gap: moderateScale(6),
   },
   actionIcon: {
-    width: moderateScale(18),
-    height: moderateScale(18),
-    marginRight: moderateScale(0),
+    width: moderateScale(16),
+    height: moderateScale(16),
     resizeMode: 'contain',
-    paddingRight: moderateScale(12),
   },
   actionText: {
-    fontSize: moderateScale(14),
-    color: '#666',
+    fontSize: moderateScale(13),
+    fontWeight: '500',
+    color: '#344054',
   },
   carouselContainer: {
     marginBottom: verticalScale(12),

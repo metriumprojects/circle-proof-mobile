@@ -338,23 +338,23 @@ const styles = StyleSheet.create({
     marginVertical: verticalScale(10),
   },
   loadMoreButton: {
-    backgroundColor: '#b4b4b4ff',
-    paddingHorizontal: verticalScale(20),
-    paddingVertical: verticalScale(12),
-    borderRadius: verticalScale(8),
+    backgroundColor: '#191C1F',
+    paddingHorizontal: verticalScale(24),
+    paddingVertical: verticalScale(10),
+    borderRadius: 9999,
     minWidth: 150,
     alignItems: 'center',
   },
   loadMoreText: {
     color: '#FFFFFF',
-    fontSize: verticalScale(16),
+    fontSize: verticalScale(14),
     fontWeight: '600',
   },
   addPostButton: {
-    backgroundColor: '#000000',
+    backgroundColor: '#191C1F',
     paddingVertical: verticalScale(8),
     paddingHorizontal: moderateScale(20),
-    borderRadius: moderateScale(20),
+    borderRadius: 9999,
     alignSelf: 'flex-start',
     marginHorizontal: 16,
     marginBottom: 10,
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   },
   addPostButtonText: {
     color: '#FFFFFF',
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(13),
     fontWeight: '600',
   },
   loadingMoreContainer: {
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(10),
   },
   loadingMoreText: {
-    color: '#b4b4b4ff',
+    color: '#667085',
     fontSize: verticalScale(14),
     fontWeight: '500',
     marginLeft: verticalScale(8),

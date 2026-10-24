@@ -75,16 +75,20 @@ const VerificationConfirmation = () => {
   const route = useRoute();
   const {
     requestId,
+    itemId,
     hasPosition: routeHasPosition,
     userPosition,
     requesterName: routeRequesterName,
     positionData: routePositionData,
+    itemData: routeItemData,
   } = (route.params as {
-    requestId?: number;
+    requestId?: number | string;
+    itemId?: number | string;
     hasPosition?: boolean;
     userPosition?: any;
     requesterName?: string;
     positionData?: any;
+    itemData?: any;
   }) || {};
 
   useEffect(() => {
@@ -169,27 +173,35 @@ const VerificationConfirmation = () => {
       return;
     }
 
-    // Validate that a position is selected
-    if (!selectedPositionId) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please select your position at the time',
-      });
-      return;
-    }
-
     setConfirmLoading(true);
     try {
-      // Prepare the request body with selectedPositionId
-      const requestBody = {
-        relationship: 'Senior', // Optional field
-        recommendation: recommendation, // Optional field
-        validatorPositionId: selectedPositionId, // Use the selected position ID
+      const isEducation =
+        positionData?.type === 'education' ||
+        positionData?.type === 'education_achievement' ||
+        routeItemData?.itemType === 'education' ||
+        routeItemData?.itemType === 'education_achievement';
+
+      const requestBody: any = {
+        relationship: 'Colleague',
+        recommendation: recommendation,
       };
 
+      if (selectedPositionId) {
+        if (isEducation) {
+          requestBody.validatorEducationId = selectedPositionId;
+        } else {
+          requestBody.validatorPositionId = selectedPositionId;
+        }
+      }
+
+      const effectiveItemId = itemId || routeItemData?.id || positionData?.id;
+
       // Call the confirmVerificationRequest API
-      const response = await confirmVerificationRequest(requestId, requestBody);
+      const response = await confirmVerificationRequest(
+        requestId,
+        effectiveItemId,
+        requestBody,
+      );
       console.log('Confirm verification response:', response);
 
       // Show success toast
@@ -204,7 +216,7 @@ const VerificationConfirmation = () => {
     } catch (error: any) {
       console.error(
         'Confirm verification error:',
-        error.response?.data?.message,
+        error.response?.data?.message || error.message,
       );
       // Show error toast
       Toast.show({
@@ -227,8 +239,9 @@ const VerificationConfirmation = () => {
 
     setCancelLoading(true);
     try {
-      // Call the cancelVerificationRequest API (no body required)
-      const response = await cancelVerificationRequest(requestId);
+      const effectiveItemId = itemId || routeItemData?.id || positionData?.id;
+      // Call the cancelVerificationRequest API with requestId and effectiveItemId
+      const response = await cancelVerificationRequest(requestId, effectiveItemId);
       console.log('Cancel verification response:', response);
 
       // Show success toast

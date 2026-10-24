@@ -16,6 +16,7 @@ import { Formik, FormikHelpers } from 'formik';
 import * as Yup from 'yup';
 import { useNavigation, NavigationProp, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSignIn } from '@clerk/clerk-expo';
 import { signIn } from '../../api/service';
 import { useAuth } from '../../context/AuthContext';
 import { getStoredToken } from '../../util/authController';
@@ -37,6 +38,8 @@ const LoginScreen: React.FC = () => {
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const { login } = useAuth();
+  const { signIn: clerkSignIn, setActive, isLoaded: isClerkLoaded } = useSignIn();
+
   // Get route params to handle prefilled data from signup
   const route = useRoute();
   const routeParams = route.params as LoginScreenRouteProp;
@@ -56,40 +59,55 @@ const LoginScreen: React.FC = () => {
   ) => {
     console.log('[LoginScreen] Starting login process with values:', values);
 
+    // 1. First attempt Clerk authentication (matches web login)
+    if (isClerkLoaded && clerkSignIn) {
+      try {
+        console.log('[LoginScreen] Attempting Clerk sign in...');
+        const signInAttempt = await clerkSignIn.create({
+          identifier: values.email.trim(),
+          password: values.password,
+        });
+
+        if (signInAttempt.status === 'complete') {
+          console.log('[LoginScreen] Clerk sign in complete, activating session...');
+          await setActive({ session: signInAttempt.createdSessionId });
+          Toast.show({
+            type: 'success',
+            text1: 'Login Successful',
+            text2: 'Welcome to CircleProof!',
+          });
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          });
+          return;
+        }
+      } catch (clerkErr: any) {
+        console.warn(
+          '[LoginScreen] Clerk login attempt failed, falling back to direct API:',
+          clerkErr?.errors?.[0]?.message || clerkErr?.message,
+        );
+      }
+    }
+
+    // 2. Fallback to direct backend API (for legacy accounts)
     try {
-      // Call the login API
-      console.log('[LoginScreen] Calling signIn API...');
+      console.log('[LoginScreen] Calling fallback signIn API...');
       const response = await signIn(values);
       console.log('[LoginScreen] API response received:', response.data);
-      console.log(response?.data, "kkk");
 
       const { token, user } = response.data.data;
-
-      // Update auth context with token and user data
-      console.log('[LoginScreen] Updating auth context with token and user data');
-      console.log('[LoginScreen] Token before storing:', token);
       await login(token, user);
-      console.log('[LoginScreen] Auth context updated successfully');
-      console.log(token, user, 'ujhj');
 
-      // Verify token is stored
-      const storedToken = await getStoredToken();
-      console.log('[LoginScreen] Token after storing in AsyncStorage:', storedToken);
-
-      // Navigate to home screen
-      console.log('[LoginScreen] Navigating to Home screen');
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
       });
     } catch (error: any) {
       console.error('[LoginScreen] Login error:', error.response);
-      let errorMessage = 'An error occurred during login';
-
-      if (error.response) {
-        // Server responded with error status
-        errorMessage = error.response.data.message || errorMessage;
-
+      let errorMessage = 'Invalid email or password';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       }
       Toast.show({
         type: 'error',
@@ -255,13 +273,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    fontWeight: '700',
+    color: '#191C1F',
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#777',
+    fontSize: 15,
+    color: '#667085',
   },
   formContainer: {
     marginBottom: 30,
@@ -270,64 +288,65 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#000000',
-    borderRadius: 10,
+    borderColor: '#eaecf0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
     paddingHorizontal: 15,
-    marginBottom: 20,
+    marginBottom: 16,
     height: 50,
   },
   input: {
     flex: 1,
     height: '100%',
-    color: '#333',
-    fontSize: 16,
+    color: '#191C1F',
+    fontSize: 15,
   },
   eyeIcon: {
     padding: 10,
   },
   eyeIconImage: {
-    width: 24,
-    height: 24,
-    tintColor: '#777',
+    width: 22,
+    height: 22,
+    tintColor: '#667085',
   },
   errorText: {
-    color: '#ff3333',
+    color: '#ff0031',
     fontSize: 12,
     marginBottom: 10,
-    marginLeft: 10,
+    marginLeft: 6,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 20,
   },
   forgotPasswordText: {
-    color: '#666',
+    color: '#667085',
     fontSize: 14,
   },
   loginButton: {
     backgroundColor: '#57B915',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 9999,
+    paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 20,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '600',
   },
   signupContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
   },
   signupText: {
-    color: '#666',
+    color: '#667085',
     fontSize: 14,
   },
   signupLink: {
-    color: '#4a90e2',
+    color: '#57B915',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });
 

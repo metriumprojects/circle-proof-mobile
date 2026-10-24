@@ -627,15 +627,18 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   closeIcon: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeIconText: {
-    fontSize: 28,
-    color: '#666',
-    fontWeight: '300',
+    fontSize: 20,
+    color: '#667085',
+    fontWeight: '400',
+    lineHeight: 22,
   },
   scrollView: {
     width: '100%',

@@ -15,6 +15,7 @@
     "build-android": "npx react-native build-android --mode=release"
   },
   "dependencies": {
+    "@clerk/clerk-expo": "^2.20.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-documents/picker": "^11.0.0",
     "@react-native/new-app-screen": "0.80.2",
@@ -22,8 +23,13 @@
     "@react-navigation/native": "^7.1.17",
     "@react-navigation/stack": "^7.4.5",
     "axios": "^1.12.2",
+    "expo": "^58.0.19",
+    "expo-auth-session": "^58.0.14",
+    "expo-crypto": "^58.0.7",
+    "expo-web-browser": "^58.0.6",
     "formik": "^2.4.6",
     "react": "19.1.0",
+    "react-dom": "^19.1.0",
     "react-native": "0.80.2",
     "react-native-blob-util": "^0.23.1",
     "react-native-country-codes-picker": "^2.3.5",
