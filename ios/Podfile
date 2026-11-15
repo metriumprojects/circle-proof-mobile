@@ -31,5 +31,24 @@ target 'circleProof' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Fix fmt 11.0.2 consteval compilation error on Xcode 26 Apple Clang
+    installer.pods_project.targets.each do |target|
+      if target.name == 'fmt'
+        target.build_configurations.each do |build_config|
+          build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        end
+      end
+    end
+
+    fmt_base = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base)
+      content = File.read(fmt_base)
+      patched = content.gsub(/^(\s*#\s*define\s+FMT_USE_CONSTEVAL\s+)1\b/) { "#{$1}0" }
+      if patched != content
+        File.chmod(0644, fmt_base) unless File.writable?(fmt_base)
+        File.write(fmt_base, patched)
+      end
+    end
   end
 end

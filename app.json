@@ -1,6 +1,6 @@
 {
   "name": "circleProof",
-  "displayName": "circleProof",
+  "displayName": "Circle Proof",
   "ios": {
     "bundleIdentifier": "com.metriumprojects.circleproof"
   },

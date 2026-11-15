@@ -20,14 +20,16 @@
         "buildType": "apk"
       },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "macos-sequoia-15.6-xcode-26.2"
       }
     },
     "testflight": {
       "distribution": "store",
       "autoIncrement": true,
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "macos-sequoia-15.6-xcode-26.2"
       }
     },
     "production-aab": {
@@ -42,7 +44,8 @@
       "ios": {
         "appleId": "metrium.projects@gmail.com",
         "appleTeamId": "8244GB6YJZ",
-        "appName": "circleProof",
+        "ascAppId": "6835173961",
+        "appName": "Circle Proof",
         "sku": "circleproof-ios",
         "language": "en-US"
       }
