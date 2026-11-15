@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,17 +17,15 @@ const { width, height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
 const guidelineBaseWidth = 375;
-const guidelineBaseHeight = 812;
 
 const scale = (size: number) => (width / guidelineBaseWidth) * size;
-const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
 const moderateScale = (size: number, factor = 0.5) =>
   size + (scale(size) - size) * factor;
 
 interface VerificationsModalProps {
   visible: boolean;
   onClose: () => void;
-  userId?: number | null;
+  userId?: number | string | null;
 }
 
 const VerificationsModal: React.FC<VerificationsModalProps> = ({
@@ -39,13 +37,7 @@ const VerificationsModal: React.FC<VerificationsModalProps> = ({
   const [timelineData, setTimelineData] = useState<any[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
 
-  useEffect(() => {
-    if (visible) {
-      loadTimeline();
-    }
-  }, [visible]);
-
-  const loadTimeline = async () => {
+  const loadTimeline = useCallback(async () => {
     try {
       setLoading(true);
       const response = userId
@@ -59,7 +51,13 @@ const VerificationsModal: React.FC<VerificationsModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (visible) {
+      loadTimeline();
+    }
+  }, [visible, loadTimeline]);
 
   const currentCompany = timelineData[activeTabIndex];
 

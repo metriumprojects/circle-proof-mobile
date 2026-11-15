@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 
 import ProfileFeed from './ProfileFeed';
@@ -15,14 +14,6 @@ import ProfileAspirations from './ProfileAspirations';
 import ProfileHobby from './ProfileHobby';
 import ProfileSkills from './ProfileSkills';
 import ProfileEducation from './ProfileEducation';
-
-const { width } = Dimensions.get('window');
-
-// Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
-const scale = (size: number) => (width / guidelineBaseWidth) * size;
-const moderateScale = (size: number, factor = 0.5) =>
-  size + (scale(size) - size) * factor;
 
 type ContentType =
   | 'feed'
@@ -33,7 +24,7 @@ type ContentType =
   | 'education';
 
 interface ProfileContentToggleProps {
-  userId?: number;
+  userId?: number | string | null;
   key?: string | number;
 }
 

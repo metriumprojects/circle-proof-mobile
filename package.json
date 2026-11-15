@@ -12,7 +12,10 @@
     "prebuild": "npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
     "build": "cd android && gradlew assembleDebug && cd ../",
     "assemble-release": "cd android && gradlew.bat clean assembleRelease",
-    "build-android": "npx react-native build-android --mode=release"
+    "build-android": "npx react-native build-android --mode=release",
+    "eas:preview": "eas build -p android --profile preview",
+    "eas:prod": "eas build -p android --profile production",
+    "eas:playstore": "eas build -p android --profile production-aab"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.20.1",
@@ -46,6 +49,7 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-video": "^6.17.0",
     "react-native-worklets": "^0.5.2",
+    "socket.io-client": "^4.8.4",
     "yup": "^1.7.0"
   },
   "devDependencies": {

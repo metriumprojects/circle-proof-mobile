@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
@@ -15,10 +14,8 @@ import { useNavigation } from '@react-navigation/native';
 import { getCompanies } from '../../api/service';
 import Toast from 'react-native-toast-message';
 
-const { width, height } = Dimensions.get('window');
-
 interface Company {
-  id: number;
+  id: number | string;
   name: string;
   logo: string | null;
   industry: string;

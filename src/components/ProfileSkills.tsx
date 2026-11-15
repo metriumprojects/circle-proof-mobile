@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  FlatList,
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AddModal from './modal/AddModal';
 import UniversalFormModal from './modal/UniversalFormModal';
-import { useState, useEffect } from 'react';
 import {
   fetchMySkills,
   addSkillLikeUnlike,
@@ -22,25 +20,14 @@ import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
 const moderateScale = (size: number, factor = 0.5) =>
   size + (size * factor - size) * factor;
-
-interface School {
-  id: number;
-  name: string;
-  logo: string;
-  type: string;
-  location: string;
-  website: string;
-  isVerified?: boolean;
-}
 
 interface Stats {
   likesCount?: number;
@@ -168,8 +155,9 @@ const ProfileSkills = () => {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [selectedValue, setSelectedValue] = useState(null);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [expandedDescriptions, setExpandedDescriptions] = useState<{
     [key: number]: boolean;
   }>({});
@@ -185,10 +173,10 @@ const ProfileSkills = () => {
   const [expandedValidations, setExpandedValidations] = useState<{
     [key: string]: boolean;
   }>({});
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage] = useState(1);
   const sampleOptions = [{ value: 'skills', label: 'Add a Skill' }];
 
-  const loadSkills = async (page: number = 1) => {
+  const loadSkills = useCallback(async (page: number = 1) => {
     try {
       if (page === 1) {
         setLoading(true);
@@ -210,19 +198,19 @@ const ProfileSkills = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadSkills(1);
-  }, []);
+  }, [loadSkills]);
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'skill') => {
+    (itemId: number | string, increment: number, type: string = 'skill') => {
       setSkillsData(prevSkills => {
         return prevSkills.map(skill => {
           // 1. Check if the skill itself is the target
-          if (type === 'skill' && Number(skill.id) === Number(itemId)) {
+          if (type === 'skill' && String(skill.id) === String(itemId)) {
             return {
               ...skill,
               stats: {
@@ -241,7 +229,7 @@ const ProfileSkills = () => {
             skill.achievements.length > 0
           ) {
             const updatedAchievements = skill.achievements.map(ach => {
-              if (Number(ach.id) === Number(itemId)) {
+              if (String(ach.id) === String(itemId)) {
                 return {
                   ...ach,
                   commentsCount: (ach.commentsCount || 0) + increment,
@@ -258,7 +246,7 @@ const ProfileSkills = () => {
 
             // Check if any achievement was actually updated
             const isAchievementUpdated = skill.achievements.some(
-              ach => Number(ach.id) === Number(itemId),
+              ach => String(ach.id) === String(itemId),
             );
 
             // Only return a new skill object if an achievement was actually updated
@@ -325,12 +313,12 @@ const ProfileSkills = () => {
     return `${start} - ${end}`;
   };
 
-  const handleLike = async (id: number, type: string = 'skill') => {
+  const handleLike = async (id: number | string, type: string = 'skill') => {
     try {
       // Optimistically update the state
       setSkillsData(prevSkills => {
         return prevSkills.map(skill => {
-          if (type === 'skill' && skill.id === id) {
+          if (type === 'skill' && String(skill.id) === String(id)) {
             const newIsLiked = !skill.isLiked;
             const newLikesCount = newIsLiked
               ? skill.stats.likesCount + 1
@@ -346,7 +334,7 @@ const ProfileSkills = () => {
           }
           if (skill.achievements) {
             const updatedAchievements = skill.achievements.map(ach => {
-              if (type === 'achievement' && ach.id === id) {
+              if (type === 'achievement' && String(ach.id) === String(id)) {
                 const newIsLiked = !ach.isLiked;
                 const newLikesCount = newIsLiked
                   ? (ach.stats?.likesCount || 0) + 1
@@ -370,9 +358,9 @@ const ProfileSkills = () => {
 
       // Make the API call to update the like status on the server
       if (type === 'skill') {
-        await addSkillLikeUnlike(id);
+        await addSkillLikeUnlike(id as any);
       } else if (type === 'achievement') {
-        const response = await toggleLikeSectionAchievement(id);
+        const response = await toggleLikeSectionAchievement(id as any);
         // If we want to be absolutely sure, we can update the state again with the actual result from server
         // but optimistic update is already done.
         console.log('Achievement like response:', response.data);
@@ -385,7 +373,7 @@ const ProfileSkills = () => {
   };
 
   const handleStatsPress = (
-    id: number,
+    id: number | string,
     type: 'skill' | 'achievement' = 'skill',
   ) => {
     setCurrentItemId(id);
@@ -393,7 +381,6 @@ const ProfileSkills = () => {
   };
 
   const handleSelect = (selected: any) => {
-    setSelectedValue(selected);
     console.log('Selected:', selected);
     if (selected.value === 'skills') {
       setModalType('skills');
@@ -503,7 +490,7 @@ const ProfileSkills = () => {
     }
   };
 
-  const handleAddAchievement = (skillId: number) => {
+  const handleAddAchievement = (skillId: number | string) => {
     setModalType('achievement');
     setAchievementType('skill');
     setInitialData({ referenceId: skillId });
@@ -522,7 +509,6 @@ const ProfileSkills = () => {
   );
 
   const renderActionButtons = (item: SkillItem | Achievement) => {
-    const isAchievement = 'achievementType' in item;
     return (
       <View style={styles.actionButtons}>
         <TouchableOpacity
@@ -849,7 +835,7 @@ const ProfileSkills = () => {
                     <TouchableOpacity
                       style={styles.statIconContainer}
                       onPress={() => {
-                        handleStatsPress(Number(achievement.id), 'achievement');
+                        handleStatsPress(achievement.id, 'achievement');
                         handleLike(achievement.id, 'achievement');
                       }}
                     >
@@ -865,7 +851,7 @@ const ProfileSkills = () => {
                     <TouchableOpacity
                       style={styles.statCountContainer}
                       onPress={() => {
-                        handleStatsPress(Number(achievement.id), 'achievement');
+                        handleStatsPress(achievement.id, 'achievement');
                         setLikesModalVisible(true);
                       }}
                     >
@@ -878,7 +864,7 @@ const ProfileSkills = () => {
                   <TouchableOpacity
                     style={styles.commentContainer}
                     onPress={() => {
-                      handleStatsPress(Number(achievement.id), 'achievement');
+                      handleStatsPress(achievement.id, 'achievement');
                       setIsAddingComment(true); // Always show input in modal
                       setCommentsModalVisible(true);
                     }}
@@ -1008,7 +994,7 @@ const ProfileSkills = () => {
               <TouchableOpacity
                 style={styles.statIconContainer}
                 onPress={() => {
-                  handleStatsPress(Number(entry.id), 'skill');
+                  handleStatsPress(entry.id, 'skill');
                   handleLike(entry.id);
                 }}
               >
@@ -1024,7 +1010,7 @@ const ProfileSkills = () => {
               <TouchableOpacity
                 style={styles.statCountContainer}
                 onPress={() => {
-                  handleStatsPress(Number(entry.id), 'skill');
+                  handleStatsPress(entry.id, 'skill');
                   setLikesModalVisible(true);
                 }}
               >
@@ -1037,7 +1023,7 @@ const ProfileSkills = () => {
             <TouchableOpacity
               style={styles.commentContainer}
               onPress={() => {
-                handleStatsPress(Number(entry.id), 'skill');
+                handleStatsPress(entry.id, 'skill');
                 setIsAddingComment(true); // Always show input in modal
                 setCommentsModalVisible(true);
               }}
@@ -1119,7 +1105,7 @@ const ProfileSkills = () => {
     <View style={styles.container}>
       {renderAddButton()}
       <View style={styles.listContent}>
-        {skillsData.map((item, index) => renderEntry(item))}
+        {skillsData.map(item => renderEntry(item))}
         {renderLoadMoreButton()}
         {skillsData.length === 0 && !loading && (
           <Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>

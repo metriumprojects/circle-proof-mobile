@@ -17,7 +17,6 @@ import {
 } from 'react-native-image-picker';
 import { pick } from '@react-native-documents/picker'; // Import the pick function
 import { createPost, fetchProfileStats } from '../api/service';
-import { useAuth } from '../context/AuthContext';
 import Toast from 'react-native-toast-message';
 import { useNavigation } from '@react-navigation/native';
 
@@ -62,12 +61,11 @@ const FeedBox = ({ isPostScreen = false, onPostCreated }: PostScreenProps) => {
   const [selectedVisibility, setSelectedVisibility] =
     React.useState<VisibilityOption>(defaultVisibilityOption);
   const [mediaAssets, setMediaAssets] = React.useState<MediaAsset[]>([]);
-  const [isUploading, setIsUploading] = React.useState(false);
+  const [, setIsUploading] = React.useState(false);
   const [isPosting, setIsPosting] = React.useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
 
-  const { token, user } = useAuth();
   const navigation = useNavigation<any>();
 
   useEffect(() => {

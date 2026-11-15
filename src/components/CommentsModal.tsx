@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -50,11 +50,11 @@ const moderateScale = (size: number, factor = 0.5) =>
   size + (scale(size) - size) * factor;
 
 interface ApiComment {
-  id: number;
+  id: number | string;
   content: string;
   createdAt: string;
   user: {
-    id: number;
+    id: number | string;
     fullName: string;
     profilePicture: string | null;
     company: string | null;
@@ -69,11 +69,11 @@ interface ApiComment {
 }
 
 interface ApiReply {
-  id: number;
+  id: number | string;
   content: string;
   createdAt: string;
   user: {
-    id: number;
+    id: number | string;
     fullName: string;
     profilePicture: string | null;
     company: string | null;
@@ -111,13 +111,13 @@ interface CommentsModalProps {
   recentComments?: ApiComment[]; // Added recentComments prop
   title?: string; // Added title prop
   stats?: any; // Added stats prop
-  postId?: number; // Added postId prop for API call
-  timelineId?: number; // Added timelineId prop for timeline comments API call
-  educationId?: number; // Added educationId prop for education comments API call
-  skillId?: number; // Added skillId prop for skill comments API call
-  hobbyId?: number; // Added hobbyId prop for hobby comments API call
-  aspirationId?: number; // Added aspirationId prop for aspiration comments API call
-  achievementId?: number; // Added achievementId prop for achievement comments
+  postId?: number | string; // Added postId prop for API call
+  timelineId?: number | string; // Added timelineId prop for timeline comments API call
+  educationId?: number | string; // Added educationId prop for education comments API call
+  skillId?: number | string; // Added skillId prop for skill comments API call
+  hobbyId?: number | string; // Added hobbyId prop for hobby comments API call
+  aspirationId?: number | string; // Added aspirationId prop for aspiration comments API call
+  achievementId?: number | string; // Added achievementId prop for achievement comments
   onCommentAdded?: () => void; // Function to call after comment is added to refresh data
   entityType?:
   | 'timeline'
@@ -135,8 +135,8 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
   onClose,
   isAddingComment,
   recentComments,
-  title,
-  stats,
+  title: _title,
+  stats: _stats,
   postId,
   timelineId,
   educationId,
@@ -173,6 +173,164 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
     },
     'CommentsModal mount/update IDs',
   );
+
+  const formatTimeAgo = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    if (diffInSeconds < 2592000)
+      return `${Math.floor(diffInSeconds / 86400)}d ago`;
+    if (diffInSeconds < 31104000)
+      return `${Math.floor(diffInSeconds / 2592000)}mo ago`;
+    return `${Math.floor(diffInSeconds / 31104000)}y ago`;
+  }, []);
+
+  const convertApiCommentToUiComment = useCallback(
+    (apiComment: any): Comment => {
+      // Handle case where apiComment might be undefined or null
+      if (!apiComment) {
+        return {
+          id: 'unknown',
+          author: 'Unknown User',
+          designation: 'User',
+          timeAgo: 'Just now',
+          createdAt: new Date().toISOString(), // Add createdAt for default object
+          text: '',
+          likes: 0,
+          isLiked: false,
+          company: null, // Add company field
+          isVerified: false,
+          replies: [],
+        };
+      }
+
+      return {
+        id: apiComment.id || 'unknown',
+        author: apiComment.user?.fullName || 'Unknown User',
+        designation: apiComment.user?.designation || 'User',
+        timeAgo: formatTimeAgo(apiComment.createdAt),
+        createdAt: apiComment.createdAt,
+        avatar: apiComment.user?.profilePicture || undefined, // Use profilePicture from API response
+        company: apiComment.user?.company || null, // Include company from API
+        text: apiComment.content,
+        likes: apiComment.likesCount || 0,
+        isLiked: apiComment.isLiked || false,
+        isVerified: apiComment.user?.isVerified || false,
+        repliesCount: apiComment.repliesCount || 0,
+        currentPage: 1,
+        totalPages: 1,
+        showReplies: false,
+        replies: Array.isArray(apiComment.replies)
+          ? apiComment.replies.map((reply: any) => ({
+              id: reply.id || 'unknown-reply',
+              author: reply.user?.fullName || 'Unknown User',
+              designation: reply.user?.designation || 'User',
+              timeAgo: formatTimeAgo(reply.createdAt),
+              createdAt: reply.createdAt,
+              avatar: reply.user?.profilePicture || undefined, // Use profilePicture from API response for replies
+              company: reply.user?.company || null, // Include company from API for replies
+              text: reply.content,
+              likes: reply.likesCount || 0,
+              isLiked: reply.isLiked || false,
+              isVerified: reply.user?.isVerified || false,
+              repliesCount: reply.repliesCount || 0,
+              currentPage: 1,
+              totalPages: 1,
+              showReplies: false,
+            }))
+          : [],
+      };
+    },
+    [formatTimeAgo],
+  );
+
+  const fetchComments = useCallback(async () => {
+    if (
+      !postId &&
+      !timelineId &&
+      !educationId &&
+      !skillId &&
+      !hobbyId &&
+      !aspirationId &&
+      !achievementId
+    )
+      return;
+
+    setLoading(true);
+    try {
+      let response;
+      if (timelineId && entityType) {
+        response = await fetchTimelineComments(timelineId, entityType);
+      } else if (educationId) {
+        response = await fetchCommentsByEducationId(
+          educationId as any,
+          entityType || 'education',
+        );
+      } else if (achievementId || entityType === 'achievement') {
+        response = await fetchCommentSectionAchievement(
+          (achievementId ||
+            educationId ||
+            skillId ||
+            hobbyId ||
+            aspirationId) as any,
+        );
+      } else if (skillId) {
+        response = await fetchSkillComments(skillId as any);
+      } else if (hobbyId) {
+        response = await fetchHobbyComments(hobbyId as any);
+      } else if (aspirationId) {
+        response = await fetchAspirationComments(aspirationId as any);
+      } else if (postId) {
+        response = await getPostComments(postId);
+      } else {
+        setLoading(false);
+        return;
+      }
+
+      if (response.data.success) {
+        const apiComments = response.data.data.comments || [];
+        // Convert API comments to UI comments
+        const convertedComments = apiComments.map((comment: ApiComment) =>
+          convertApiCommentToUiComment(comment),
+        );
+        setCommentsData(convertedComments);
+      } else {
+        // Set empty array if API response indicates failure
+        setCommentsData([]);
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Failed to load comments',
+        });
+      }
+    } catch (error) {
+      console.log('Error fetching comments:', error);
+      // Set empty array in case of error
+      setCommentsData([]);
+      // Toast.show({
+      //   type: 'error',
+      //   text1: 'Error',
+      //   text2: 'Failed to load comments',
+      // });
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    postId,
+    timelineId,
+    educationId,
+    skillId,
+    hobbyId,
+    aspirationId,
+    achievementId,
+    entityType,
+    convertApiCommentToUiComment,
+  ]);
 
   React.useEffect(() => {
     if (visible) {
@@ -235,134 +393,10 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
     aspirationId,
     achievementId,
     entityType, // Add entityType to dependency array to ensure refresh when it changes
+    slideAnim,
+    convertApiCommentToUiComment,
+    fetchComments,
   ]);
-
-  const fetchComments = async () => {
-    if (
-      !postId &&
-      !timelineId &&
-      !educationId &&
-      !skillId &&
-      !hobbyId &&
-      !aspirationId &&
-      !achievementId
-    )
-      return;
-
-    setLoading(true);
-    try {
-      let response;
-      if (timelineId && entityType) {
-        response = await fetchTimelineComments(timelineId, entityType);
-      } else if (educationId) {
-        response = await fetchCommentsByEducationId(
-          Number(educationId),
-          entityType || 'education',
-        );
-      } else if (achievementId || entityType === 'achievement') {
-        response = await fetchCommentSectionAchievement(
-          Number(
-            achievementId || educationId || skillId || hobbyId || aspirationId,
-          ),
-        );
-      } else if (skillId) {
-        response = await fetchSkillComments(Number(skillId));
-      } else if (hobbyId) {
-        response = await fetchHobbyComments(Number(hobbyId));
-      } else if (aspirationId) {
-        response = await fetchAspirationComments(Number(aspirationId));
-      } else if (postId) {
-        response = await getPostComments(postId);
-      } else {
-        setLoading(false);
-        return;
-      }
-
-      if (response.data.success) {
-        const apiComments = response.data.data.comments || [];
-        // Convert API comments to UI comments
-        const convertedComments = apiComments.map((comment: ApiComment) =>
-          convertApiCommentToUiComment(comment),
-        );
-        setCommentsData(convertedComments);
-      } else {
-        // Set empty array if API response indicates failure
-        setCommentsData([]);
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: 'Failed to load comments',
-        });
-      }
-    } catch (error) {
-      console.log('Error fetching comments:', error);
-      // Set empty array in case of error
-      setCommentsData([]);
-      // Toast.show({
-      //   type: 'error',
-      //   text1: 'Error',
-      //   text2: 'Failed to load comments',
-      // });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const convertApiCommentToUiComment = (apiComment: any): Comment => {
-    // Handle case where apiComment might be undefined or null
-    if (!apiComment) {
-      return {
-        id: 'unknown',
-        author: 'Unknown User',
-        designation: 'User',
-        timeAgo: 'Just now',
-        createdAt: new Date().toISOString(), // Add createdAt for default object
-        text: '',
-        likes: 0,
-        isLiked: false,
-        company: null, // Add company field
-        isVerified: false,
-        replies: [],
-      };
-    }
-
-    return {
-      id: apiComment.id || 'unknown',
-      author: apiComment.user?.fullName || 'Unknown User',
-      designation: apiComment.user?.designation || 'User',
-      timeAgo: formatTimeAgo(apiComment.createdAt),
-      createdAt: apiComment.createdAt,
-      avatar: apiComment.user?.profilePicture || undefined, // Use profilePicture from API response
-      company: apiComment.user?.company || null, // Include company from API
-      text: apiComment.content,
-      likes: apiComment.likesCount || 0,
-      isLiked: apiComment.isLiked || false,
-      isVerified: apiComment.user?.isVerified || false,
-      repliesCount: apiComment.repliesCount || 0,
-      currentPage: 1,
-      totalPages: 1,
-      showReplies: false,
-      replies: Array.isArray(apiComment.replies)
-        ? apiComment.replies.map((reply: any) => ({
-          id: reply.id || 'unknown-reply',
-          author: reply.user?.fullName || 'Unknown User',
-          designation: reply.user?.designation || 'User',
-          timeAgo: formatTimeAgo(reply.createdAt),
-          createdAt: reply.createdAt,
-          avatar: reply.user?.profilePicture || undefined, // Use profilePicture from API response for replies
-          company: reply.user?.company || null, // Include company from API for replies
-          text: reply.content,
-          likes: reply.likesCount || 0,
-          isLiked: reply.isLiked || false,
-          isVerified: reply.user?.isVerified || false,
-          repliesCount: reply.repliesCount || 0,
-          currentPage: 1,
-          totalPages: 1,
-          showReplies: false,
-        }))
-        : [],
-    };
-  };
 
   // Sort the comments data based on the selected sort option
   const getSortedCommentsData = () => {
@@ -390,22 +424,6 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
       default:
         return sortedData;
     }
-  };
-
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400)
-      return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    if (diffInSeconds < 2592000)
-      return `${Math.floor(diffInSeconds / 86400)}d ago`;
-    if (diffInSeconds < 31104000)
-      return `${Math.floor(diffInSeconds / 2592000)}mo ago`;
-    return `${Math.floor(diffInSeconds / 31104000)}y ago`;
   };
 
   const panResponder = PanResponder.create({
@@ -484,10 +502,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
 
       // Add parentCommentId only for replies
       if (isReplying && activeCommentId) {
-        commentData.parentCommentId =
-          typeof activeCommentId === 'number'
-            ? activeCommentId
-            : Number(activeCommentId);
+        commentData.parentCommentId = activeCommentId;
       }
 
       // Determine which ID to use for the API call
@@ -511,41 +526,43 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
 
       // Call the appropriate API to add the comment
       let response;
-      const combinedId = Number(
+      const combinedId =
         achievementId ||
         hobbyId ||
         skillId ||
         aspirationId ||
         educationId ||
         timelineId ||
-        postId,
-      );
+        postId;
 
       if (timelineId && entityType) {
         response = await addTimelineComment(
-          Number(timelineId),
+          timelineId as any,
           commentData,
           entityType,
         );
       } else if (educationId) {
         response = await addCommentsReplies(
-          Number(educationId),
+          educationId as any,
           commentData,
           entityType || 'education',
         );
       } else if (achievementId || entityType === 'achievement') {
-        response = await addCommentSectionAchievement(combinedId, commentData);
+        response = await addCommentSectionAchievement(
+          combinedId as any,
+          commentData,
+        );
       } else if (skillId) {
-        response = await addSkillCommentReply(Number(skillId), commentData);
+        response = await addSkillCommentReply(skillId as any, commentData);
       } else if (hobbyId) {
-        response = await addHobbyCommentReply(Number(hobbyId), commentData);
+        response = await addHobbyCommentReply(hobbyId as any, commentData);
       } else if (aspirationId) {
         response = await addAspirationCommentReply(
-          Number(aspirationId),
+          aspirationId as any,
           commentData,
         );
       } else {
-        response = await addComment(Number(postId), commentData);
+        response = await addComment(postId as any, commentData);
       }
 
       if (response.data.success) {
@@ -768,7 +785,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
       }
 
       const response = await fetchSocialCommentsById(
-        Number(commentId),
+        commentId as any,
         targetPage,
       );
       if (response.data.success) {
@@ -794,13 +811,13 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
 
   const handleLike = async (
     commentId: string | number,
-    isReply = false,
-    parentId?: string | number,
+    _isReply = false,
+    _parentId?: string | number,
   ) => {
     if (!commentId) return; // Guard clause to ensure commentId exists
 
     try {
-      const idToUse = Number(commentId);
+      const idToUse = commentId as any;
       // Call the appropriate API based on whether it's a timeline comment or post comment
       if (achievementId || entityType === 'achievement') {
         // Use achievement comment like API if achievementId is provided

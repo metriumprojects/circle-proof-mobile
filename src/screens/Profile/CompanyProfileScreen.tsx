@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,16 +13,13 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { getCompanyById } from '../../api/service';
 import Toast from 'react-native-toast-message';
 
-const { width, height } = Dimensions.get('window');
-
 const CompanyProfileScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const [activeTab, setActiveTab] = useState('Employees');
-  const [isVerifiedEmployee, setIsVerifiedEmployee] = useState(false);
   const [companyData, setCompanyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState<number | null>(null);
+  const [companyId, setCompanyId] = useState<number | string | null>(null);
 
    // Extract company ID from route params
   useEffect(() => {
@@ -34,14 +30,7 @@ const CompanyProfileScreen = () => {
     }
   }, [route.params]);
 
-  // Fetch company data when component mounts and company ID is available
-  useEffect(() => {
-    if (companyId) {
-      fetchCompanyData();
-    }
-  }, [companyId]);
-
-  const fetchCompanyData = async () => {
+  const fetchCompanyData = useCallback(async () => {
     try {
       setLoading(true);
       const response = await getCompanyById(companyId!);
@@ -84,7 +73,14 @@ const CompanyProfileScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyId]);
+
+  // Fetch company data when component mounts and company ID is available
+  useEffect(() => {
+    if (companyId) {
+      fetchCompanyData();
+    }
+  }, [companyId, fetchCompanyData]);
 
   if (loading) {
     return (
@@ -107,7 +103,7 @@ const CompanyProfileScreen = () => {
     );
   }
 
-   const    renderEmployeeCard = (employee: any, index: number) => (
+   const    renderEmployeeCard = (employee: any, _index: number) => (
     <View key={employee.id} style={styles.employeeCard}>
       <View style={styles.employeeHeader}>
         <Image source={employee.avatar} style={styles.employeeAvatar} />

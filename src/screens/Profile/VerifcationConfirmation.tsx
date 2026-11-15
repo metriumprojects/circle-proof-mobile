@@ -10,7 +10,6 @@ import {
   Image,
   Modal,
   Alert,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import {
@@ -35,11 +34,10 @@ const VerificationConfirmation = () => {
   const [startYear, setStartYear] = useState('');
   const [endMonth, setEndMonth] = useState('');
   const [endYear, setEndYear] = useState('');
-  const [endCurrentPosition, setEndCurrentPosition] = useState(false);
+  const [endCurrentPosition] = useState(false);
   const [location, setLocation] = useState('');
   const [locationType, setLocationType] = useState('');
   const [description, setDescription] = useState('');
-  const [position, setPosition] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Asset[]>([]);
   const [hasPosition, setHasPosition] = useState<boolean | null>(null);
   const [showFullForm, setShowFullForm] = useState(false);
@@ -48,12 +46,14 @@ const VerificationConfirmation = () => {
   const [userPositions, setUserPosition] = useState<any>(null);
   const [selectedPosition, setSelectedPosition] = useState('');
   const [recommendation, setRecommendation] = useState('');
+  const [relationship, setRelationship] = useState('Colleague');
+  const [showRelationshipModal, setShowRelationshipModal] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [companies, setCompanies] = useState<any[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(
-    null,
-  );
+  const [selectedCompanyId, setSelectedCompanyId] = useState<
+    number | string | null
+  >(null);
   const [addPositionLoading, setAddPositionLoading] = useState(false);
   const [showCompanySuggestions, setShowCompanySuggestions] = useState(false);
   const [filteredCompanies, setFilteredCompanies] = useState<any[]>([]);
@@ -67,9 +67,9 @@ const VerificationConfirmation = () => {
   const [showLocationTypeModal, setShowLocationTypeModal] = useState(false);
   const [showPositionModal, setShowPositionModal] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
-  const [selectedPositionId, setSelectedPositionId] = useState<number | null>(
-    null,
-  );
+  const [selectedPositionId, setSelectedPositionId] = useState<
+    number | string | null
+  >(null);
 
   const navigation = useNavigation();
   const route = useRoute();
@@ -158,6 +158,16 @@ const VerificationConfirmation = () => {
   const years = Array.from({ length: 50 }, (_, i) =>
     (new Date().getFullYear() - i).toString(),
   );
+  const relationshipOptions = [
+    'Colleague',
+    'Manager',
+    'Direct Report',
+    'Peer',
+    'Classmate',
+    'Mentor',
+    'Client',
+    'Other',
+  ];
   const locationTypes = ['On-site', 'Remote', 'Hybrid'];
   const positions = [
     { title: 'Please select', id: null },
@@ -181,26 +191,48 @@ const VerificationConfirmation = () => {
         routeItemData?.itemType === 'education' ||
         routeItemData?.itemType === 'education_achievement';
 
-      const requestBody: any = {
-        relationship: 'Colleague',
-        recommendation: recommendation,
-      };
-
-      if (selectedPositionId) {
-        if (isEducation) {
-          requestBody.validatorEducationId = selectedPositionId;
-        } else {
-          requestBody.validatorPositionId = selectedPositionId;
-        }
-      }
-
       const effectiveItemId = itemId || routeItemData?.id || positionData?.id;
+      let payload: any;
+
+      if (selectedFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('relationship', relationship || 'Colleague');
+        formData.append('recommendation', recommendation || '');
+        if (selectedPositionId) {
+          if (isEducation) {
+            formData.append('validatorEducationId', String(selectedPositionId));
+          } else {
+            formData.append('validatorPositionId', String(selectedPositionId));
+          }
+        }
+        selectedFiles.forEach((file, index) => {
+          formData.append('media', {
+            uri: file.uri || '',
+            type: file.type || 'image/jpeg',
+            name: (file as any).name || file.fileName || `image_${index}.jpg`,
+          } as any);
+        });
+        payload = formData;
+      } else {
+        const requestBody: any = {
+          relationship: relationship || 'Colleague',
+          recommendation: recommendation,
+        };
+        if (selectedPositionId) {
+          if (isEducation) {
+            requestBody.validatorEducationId = selectedPositionId;
+          } else {
+            requestBody.validatorPositionId = selectedPositionId;
+          }
+        }
+        payload = requestBody;
+      }
 
       // Call the confirmVerificationRequest API
       const response = await confirmVerificationRequest(
         requestId,
         effectiveItemId,
-        requestBody,
+        payload,
       );
       console.log('Confirm verification response:', response);
 
@@ -676,14 +708,34 @@ const VerificationConfirmation = () => {
                 {requesterName || 'the user'} experiences:
               </Text>
 
+              {userPositions?.positions?.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    {positionData?.type === 'education' ||
+                    positionData?.type === 'education_achievement'
+                      ? 'Your education at the time'
+                      : 'Your position at the time'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.dropdown}
+                    onPress={() => setShowPositionModal(true)}
+                  >
+                    <Text style={styles.dropdownText}>
+                      {selectedPosition || 'Please select'}
+                    </Text>
+                    <Text style={styles.dropdownIcon}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Your position at the time</Text>
+                <Text style={styles.label}>Relationship</Text>
                 <TouchableOpacity
                   style={styles.dropdown}
-                  onPress={() => setShowPositionModal(true)}
+                  onPress={() => setShowRelationshipModal(true)}
                 >
                   <Text style={styles.dropdownText}>
-                    {selectedPosition || 'Please select'}
+                    {relationship || 'Colleague'}
                   </Text>
                   <Text style={styles.dropdownIcon}>▼</Text>
                 </TouchableOpacity>
@@ -700,6 +752,53 @@ const VerificationConfirmation = () => {
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Supporting Evidence (optional)</Text>
+                {selectedFiles.length > 0 ? (
+                  <View style={styles.multipleMediaContainer}>
+                    {selectedFiles.map((file, index) => (
+                      <View key={index} style={styles.mediaPreviewContainer}>
+                        {file.type?.startsWith('image') || file.uri ? (
+                          <Image
+                            source={{ uri: file.uri }}
+                            style={styles.mediaPreviewImage}
+                          />
+                        ) : (
+                          <View style={styles.mediaPreviewVideo}>
+                            <Text style={styles.mediaPreviewText}>
+                              File: {file.fileName || 'Selected'}
+                            </Text>
+                          </View>
+                        )}
+                        <TouchableOpacity
+                          style={styles.removeMediaButton}
+                          onPress={() => handleRemoveMedia(index)}
+                        >
+                          <Text style={styles.removeText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    {selectedFiles.length < 10 && (
+                      <TouchableOpacity
+                        style={styles.uploadButton}
+                        onPress={handleMediaUpload}
+                      >
+                        <Text style={styles.uploadIcon}>⬆</Text>
+                        <Text style={styles.uploadText}>Add More</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.uploadButton}
+                    onPress={handleMediaUpload}
+                  >
+                    <Text style={styles.uploadIcon}>📷</Text>
+                    <Text style={styles.uploadText}>Upload</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={styles.buttonRow}>
@@ -1247,6 +1346,14 @@ const VerificationConfirmation = () => {
           }
         }}
         title="Select Position"
+      />
+
+      <DropdownModal
+        visible={showRelationshipModal}
+        onClose={() => setShowRelationshipModal(false)}
+        options={relationshipOptions}
+        onSelect={setRelationship}
+        title="Select Relationship"
       />
 
       <DropdownModal

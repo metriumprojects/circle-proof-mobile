@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Modal,
   View,
@@ -7,10 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Platform,
   Image,
-  Dimensions,
-  PanResponder,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { launchImageLibrary, Asset } from 'react-native-image-picker';
@@ -39,8 +36,6 @@ import {
 } from '../../api/service';
 import { useNavigation } from '@react-navigation/native';
 import downArrow from '../../assets/icons/down.png';
-
-const { width, height } = Dimensions.get('window');
 
 type FormMode = 'add' | 'edit';
 type FormType =
@@ -217,90 +212,95 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
   const grades = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'F', 'Pass', 'Fail'];
-  const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  const years = [
-    // '2035',
-    // '2034',
-    // '2033',
-    // '2032',
-    // '2031',
-    // '2030',
-    // '2029',
-    '2028',
-    '2027',
-    '2026',
-    '2025',
-    '2024',
-    '2023',
-    '2022',
-    '2021',
-    '2020',
-    '2019',
-    '2018',
-    '2017',
-    '2016',
-    '2015',
-    '2014',
-    '2013',
-    '2012',
-    '2011',
-    '2010',
-    '2009',
-    '2008',
-    '2007',
-    '2006',
-    '2004',
-    '2003',
-    '2002',
-    '2001',
-    '2000',
-    '1999',
-    '1998',
-    '1997',
-    '1996',
-    '1995',
-    '1994',
-    '1993',
-    '1992',
-    '1991',
-    '1990',
-    '1989',
-    '1988',
-    '1987',
-    '1986',
-    '1985',
-    '1984',
-    '1983',
-    '1982',
-    '1981',
-    '1980',
-    '1979',
-    '1978',
-    '1977',
-    '1976',
-    '1975',
-    '1974',
-    '1973',
-    '1972',
-    '1971',
-    '1970',
-  ];
+  const months = useMemo(
+    () => [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ],
+    [],
+  );
+  const years = useMemo(
+    () => [
+      // '2035',
+      // '2034',
+      // '2033',
+      // '2032',
+      // '2031',
+      // '2030',
+      // '2029',
+      '2028',
+      '2027',
+      '2026',
+      '2025',
+      '2024',
+      '2023',
+      '2022',
+      '2021',
+      '2020',
+      '2019',
+      '2018',
+      '2017',
+      '2016',
+      '2015',
+      '2014',
+      '2013',
+      '2012',
+      '2011',
+      '2010',
+      '2009',
+      '2008',
+      '2007',
+      '2006',
+      '2004',
+      '2003',
+      '2002',
+      '2001',
+      '2000',
+      '1999',
+      '1998',
+      '1997',
+      '1996',
+      '1995',
+      '1994',
+      '1993',
+      '1992',
+      '1991',
+      '1990',
+      '1989',
+      '1988',
+      '1987',
+      '1986',
+      '1985',
+      '1984',
+      '1983',
+      '1982',
+      '1981',
+      '1980',
+      '1979',
+      '1978',
+      '1977',
+      '1976',
+      '1975',
+      '1974',
+      '1973',
+      '1972',
+      '1971',
+      '1970',
+    ],
+    [],
+  );
 
   // State for company suggestions
-  const [showCompanySuggestions, setShowCompanySuggestions] = useState(false);
   const [formData, setFormData] = useState<Partial<FormData>>({});
   const [companySuggestions, setCompanySuggestions] = useState<any[]>([]);
   const [schoolSuggestions, setSchoolSuggestions] = useState<School[]>([]);
@@ -315,25 +315,21 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
     hasNext: false,
     loadingMore: false,
   });
-  const [showSchoolSuggestions, setShowSchoolSuggestions] = useState(false);
-  const [showAddSchoolButton, setShowAddSchoolButton] = useState(false);
+  const [, setShowAddSchoolButton] = useState(false);
   const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(null);
-  const [loadingCompanies, setLoadingCompanies] = useState<boolean>(false);
-  const [loadingHobbies, setLoadingHobbies] = useState<boolean>(false);
-  const [showHobbySuggestions, setShowHobbySuggestions] = useState(false);
+  const [, setLoadingCompanies] = useState<boolean>(false);
+  const [, setLoadingHobbies] = useState<boolean>(false);
   const [isAddHobbyModalOpen, setIsAddHobbyModalOpen] =
     useState<boolean>(false);
   const [companyModalVisible, setCompanyModalVisible] = useState(false);
   const [schoolModalVisible, setSchoolModalVisible] = useState(false);
   const [hobbyModalVisible, setHobbyModalVisible] = useState(false);
-  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [, setModalSearchQuery] = useState('');
   const [currentModalType, setCurrentModalType] = useState<
     'company' | 'school' | 'hobby'
   >('company');
 
   const prevIsOpen = useRef(false);
-
-  const hobbies = ['Please select', ...hobbiesList.map(h => h.name)];
 
   // Fetch companies from API
   const fetchCompanies = useCallback(async () => {
@@ -452,7 +448,12 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
 
   // Initialize form data and fetch companies/schools
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      prevIsOpen.current = false;
+      return;
+    }
+    if (prevIsOpen.current) return;
+    prevIsOpen.current = true;
 
     const initializeFormData = () => {
       if (
@@ -650,9 +651,16 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
     if (type === 'hobby') {
       fetchHobbies();
     }
-
-    prevIsOpen.current = isOpen;
-  }, [isOpen]);
+  }, [
+    isOpen,
+    mode,
+    initialData,
+    type,
+    achievementType,
+    fetchCompanies,
+    fetchSchools,
+    fetchHobbies,
+  ]);
 
   const handleInputChange = useCallback(
     (field: string, value: any): void => {
@@ -698,14 +706,6 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
     },
     [schoolSuggestions, type, achievementType],
   );
-
-  // Add this function to handle media removal
-  const handleRemoveMedia = useCallback((): void => {
-    setSelectedFiles([]);
-    setExistingMediaUrl(null);
-    handleInputChange('mediaUrl', null);
-    handleInputChange('media', null);
-  }, [handleInputChange]);
 
   const handleCheckboxChange = useCallback((field: string): void => {
     setFormData(prev => {
@@ -842,7 +842,7 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
         if (mode === 'edit') {
           // Send existing media URLs as an array in existingMedia field
           if (existingMedia.length > 0) {
-            existingMedia.forEach((url, index) => {
+            existingMedia.forEach(url => {
               formDataToSend.append('existingMedia[]', url);
             });
           }
@@ -1093,7 +1093,7 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
           if (achievementId) {
             // Send existing media URLs as an array in existingMedia field
             if (existingMedia.length > 0) {
-              existingMedia.forEach((url, index) => {
+              existingMedia.forEach(url => {
                 formDataToSend.append('existingMedia[]', url);
               });
             }
@@ -1307,7 +1307,7 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
         if (mode === 'edit') {
           // Send existing media URLs as an array in existingMedia field
           if (existingMedia.length > 0) {
-            existingMedia.forEach((url, index) => {
+            existingMedia.forEach(url => {
               formDataToSend.append('existingMedia[]', url);
             });
           }
@@ -1476,7 +1476,7 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
         // Handle media
         if (mode === 'edit') {
           if (existingMedia.length > 0) {
-            existingMedia.forEach((url, index) => {
+            existingMedia.forEach(url => {
               formDataToSend.append('existingMedia[]', url);
             });
           } else {
@@ -1850,12 +1850,10 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
     type,
     achievementType,
     selectedFiles,
-    existingMediaUrl,
     mode,
     months,
     companySuggestions,
-    schoolSuggestions,
-    refreshTimeline,
+    hobbiesList,
     initialData,
     // onClose,
     existingMedia,
@@ -2039,6 +2037,7 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
       </>
     ),
     [
+      renderDropdown,
       showStartMonthDropdown,
       showStartYearDropdown,
       showEndMonthDropdown,
@@ -2754,7 +2753,6 @@ const UniversalFormModal: React.FC<UniversalFormModalProps> = ({
         );
       case 'achievement':
         if (achievementType === 'career') {
-          let startDate, endDate;
           const achievementData = formData as AchievementData;
 
           return (

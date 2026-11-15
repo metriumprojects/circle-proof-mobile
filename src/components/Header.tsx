@@ -7,13 +7,10 @@ import {
   TouchableOpacity,
   Image,
   TextInput,
-  Modal,
-  FlatList,
   SectionList,
 } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import LinearGradient from 'react-native-linear-gradient';
 import { searchQuery } from '../api/service';
 import { fetchUnreadNotificationCount } from '../api/service';
 import { useNotification } from '../context/NotificationContext';
@@ -28,7 +25,7 @@ const moderateScale = (size: number, factor = 0.5) =>
   size + (scale(size) - size) * factor;
 
 interface User {
-  id: number;
+  id: number | string;
   type: string;
   fullName: string;
   username: string | null;
@@ -38,7 +35,7 @@ interface User {
 }
 
 interface Company {
-  id: number;
+  id: number | string;
   type: string;
   name: string;
   industry: string | null;
@@ -95,7 +92,6 @@ const Header: React.FC<HeaderProps> = ({
     width: 0,
     height: 0,
   });
-  const [searchUnreadCount, setSearchUnreadCount] = useState(0);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchContainerRef = useRef<View>(null);
   const searchInputRef = useRef<TextInput>(null);
@@ -154,14 +150,14 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleUserPress = (userId: number) => {
+  const handleUserPress = (userId: number | string) => {
     setShowResultsModal(false);
     setSearchText('');
     setSearchResults(null);
     navigation.navigate('ProfileView', { userId });
   };
 
-  const handleCompanyPress = (companyId: number) => {
+  const handleCompanyPress = (companyId: number | string) => {
     setShowResultsModal(false);
     setSearchText('');
     setSearchResults(null);
@@ -183,39 +179,9 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleModalOverlayPress = (event: any) => {
-    // Get the touch coordinates relative to the entire screen
-    const { pageX, pageY } = event.nativeEvent;
-
-    // Check if the touch is within the search container area
-    const isTouchInSearchArea =
-      pageX >= searchContainerLayout.x &&
-      pageX <= searchContainerLayout.x + searchContainerLayout.width &&
-      pageY >= searchContainerLayout.y &&
-      pageY <= searchContainerLayout.y + searchContainerLayout.height;
-
-    // If touch is not in search area, close the modal but keep input focused
-    if (!isTouchInSearchArea) {
-      setShowResultsModal(false);
-      // Keep the input focused for better UX
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
-    }
-  };
-
   const handleSearchInputFocus = () => {
     measureSearchContainer();
     // Show modal if there are results or if user is typing
-    if (searchText.length >= 2) {
-      setShowResultsModal(true);
-    }
-  };
-
-  const handleSearchContainerPress = () => {
-    // When search container is pressed, ensure input is focused
-    searchInputRef.current?.focus();
-    // Show modal if we have text and should show results
     if (searchText.length >= 2) {
       setShowResultsModal(true);
     }
@@ -240,7 +206,7 @@ const Header: React.FC<HeaderProps> = ({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, []);
+  }, [setUnreadCount]);
 
   // Prepare section data for SectionList
   const getSectionData = (): SectionData[] => {

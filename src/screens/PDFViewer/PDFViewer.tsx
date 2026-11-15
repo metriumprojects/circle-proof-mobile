@@ -29,7 +29,7 @@ const PDFViewer = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
 
-  const handleLoadComplete = (numberOfPages: number, filePath: string) => {
+  const handleLoadComplete = (numberOfPages: number, _filePath: string) => {
     console.log(`Number of pages: ${numberOfPages}`);
     setTotalPages(numberOfPages);
     setLoading(false);
@@ -91,7 +91,7 @@ const PDFViewer = () => {
             trustAllCerts={false}
             style={styles.pdf}
             onLoadComplete={handleLoadComplete}
-            onPageChanged={(page, numberOfPages) => {
+            onPageChanged={(page, _numberOfPages) => {
               setCurrentPage(page);
             }}
             onError={handleError}

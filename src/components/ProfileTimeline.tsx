@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import UniversalFormModal from './modal/UniversalFormModal';
 import LikesModal from './LikesModal';
 import CommentsModal from './CommentsModal';
 import ValidationsListModal from './modal/ValidationsListModal';
-import { useState, useEffect } from 'react';
 import {
   fetchMyTimeline,
   likeUnlikeTimeline,
@@ -24,10 +23,9 @@ import {
   fetchAchievementsById,
 } from '../api/service';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -158,26 +156,9 @@ interface TimelineCompany {
   positions: Position[];
 }
 
-interface TimelineResponse {
-  code: number;
-  success: boolean;
-  message: string;
-  data: {
-    timeline: TimelineCompany[];
-    pagination: {
-      currentPage: number;
-      totalPages: number;
-      totalItems: number;
-      hasNext: boolean;
-      hasPrev: boolean;
-    };
-  };
-  error: null | string;
-}
-
 interface ProfileTimelineProps {
   timelineData?: TimelineCompany[];
-  userId?: number | null;
+  userId?: number | string | null;
 }
 
 const sampleOptions = [
@@ -221,7 +202,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
         return prevData.map(companyData => ({
           ...companyData,
           positions: companyData.positions.map(pos => {
-            if (type === 'position' && pos.id === itemId) {
+            if (type === 'position' && String(pos.id) === String(itemId)) {
               return {
                 ...pos,
                 stats: {
@@ -236,7 +217,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
               pos.achievements.length > 0
             ) {
               const updatedAchievements = pos.achievements.map(ach => {
-                if (Number(ach.id) === Number(itemId)) {
+                if (String(ach.id) === String(itemId)) {
                   return {
                     ...ach,
                     stats: {
@@ -250,7 +231,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
 
               // Check if any achievement was actually updated
               const isAchievementUpdated = pos.achievements.some(
-                ach => Number(ach.id) === Number(itemId),
+                ach => String(ach.id) === String(itemId),
               );
 
               if (isAchievementUpdated) {
@@ -264,7 +245,6 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
     },
     [],
   );
-  const [selectedValue, setSelectedValue] = useState(null);
   const [apiTimelineData, setApiTimelineData] = useState<TimelineCompany[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -287,9 +267,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
     hasPrev: false,
   });
   const [loadingMore, setLoadingMore] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [showDraft, setShowDraft] = useState(false);
-  const [switchingTabs, setSwitchingTabs] = useState(false);
 
   const toggleExpand = useCallback((itemId: string) => {
     setExpandedItems(prev => {
@@ -316,33 +294,31 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
   }, []);
 
   const handleSelect = useCallback((selected: any) => {
-    setSelectedValue(selected);
     console.log('Selected:', selected);
   }, []);
 
-  const monthNames = [
-    'Month',
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
-  const getMonthName = (monthNumber: number | null): string => {
+  const getMonthName = useCallback((monthNumber: number | null): string => {
+    const monthNames = [
+      'Month',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
     if (monthNumber === null || monthNumber === undefined) return 'Month';
     if (monthNumber >= 1 && monthNumber <= 12) {
       return monthNames[monthNumber];
     }
     return 'Month';
-  };
+  }, []);
 
   const refreshTimeline = useCallback(() => {
     setRefreshTrigger(prev => prev + 1);
@@ -376,47 +352,89 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
     [],
   );
 
-  const loadTimelineData = async (page: number = 1) => {
-    try {
-      if (page === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      setError(null);
-
-      if (propTimelineData) {
-        setApiTimelineData(propTimelineData);
-        if (page === 1) setLoading(false);
-        return;
-      }
-
-      const response = await fetchMyTimeline(page);
-      console.log('API Response:', response);
-
-      if (
-        response &&
-        response.data &&
-        response.data.data &&
-        response.data.data.timeline
-      ) {
+  const loadTimelineData = useCallback(
+    async (page: number = 1) => {
+      try {
         if (page === 1) {
-          setApiTimelineData(response.data.data.timeline);
+          setLoading(true);
         } else {
-          setApiTimelineData(prevData => [
-            ...prevData,
-            ...response.data.data.timeline,
-          ]);
+          setLoadingMore(true);
         }
 
-        if (response.data.data.pagination) {
-          console.log('Pagination data:', response.data.pagination);
-          setPagination(response.data.data.pagination);
-        } else {
-          console.log('No pagination data in response');
+        setError(null);
+
+        if (propTimelineData) {
+          setApiTimelineData(propTimelineData);
+          if (page === 1) setLoading(false);
+          return;
+        }
+
+        const response = await fetchMyTimeline(page);
+        console.log('API Response:', response);
+
+        if (
+          response &&
+          response.data &&
+          response.data.data &&
+          response.data.data.timeline
+        ) {
+          if (page === 1) {
+            setApiTimelineData(response.data.data.timeline);
+          } else {
+            setApiTimelineData(prevData => [
+              ...prevData,
+              ...response.data.data.timeline,
+            ]);
+          }
+
+          if (response.data.data.pagination) {
+            console.log('Pagination data:', response.data.pagination);
+            setPagination(response.data.data.pagination);
+          } else {
+            console.log('No pagination data in response');
+            const defaultPageSize = 10;
+            const hasMore =
+              response.data.data.timeline.length >= defaultPageSize;
+            setPagination(prev => ({
+              currentPage: page,
+              totalPages: prev.totalPages,
+              totalItems: prev.totalItems,
+              hasNext: hasMore,
+              hasPrev: page > 1,
+            }));
+          }
+        } else if (response && response.data && response.data.timeline) {
+          if (page === 1) {
+            setApiTimelineData(response.data.timeline);
+          } else {
+            setApiTimelineData(prevData => [
+              ...prevData,
+              ...response.data.timeline,
+            ]);
+          }
+
+          if (response.data.pagination) {
+            setPagination(response.data.pagination);
+          } else {
+            const defaultPageSize = 10;
+            const hasMore = response.data.timeline.length >= defaultPageSize;
+            setPagination(prev => ({
+              currentPage: page,
+              totalPages: prev.totalPages,
+              totalItems: prev.totalItems,
+              hasNext: hasMore,
+              hasPrev: page > 1,
+            }));
+          }
+        } else if (response && Array.isArray(response)) {
+          if (page === 1) {
+            setApiTimelineData(response);
+          } else {
+            setApiTimelineData(prevData => [...prevData, ...response]);
+          }
+
           const defaultPageSize = 10;
-          const hasMore = response.data.data.timeline.length >= defaultPageSize;
+          const hasMore = response.length >= defaultPageSize;
           setPagination(prev => ({
             currentPage: page,
             totalPages: prev.totalPages,
@@ -424,22 +442,15 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
             hasNext: hasMore,
             hasPrev: page > 1,
           }));
-        }
-      } else if (response && response.data && response.data.timeline) {
-        if (page === 1) {
-          setApiTimelineData(response.data.timeline);
-        } else {
-          setApiTimelineData(prevData => [
-            ...prevData,
-            ...response.data.timeline,
-          ]);
-        }
+        } else if (response && response.data && Array.isArray(response.data)) {
+          if (page === 1) {
+            setApiTimelineData(response.data);
+          } else {
+            setApiTimelineData(prevData => [...prevData, ...response.data]);
+          }
 
-        if (response.data.pagination) {
-          setPagination(response.data.pagination);
-        } else {
           const defaultPageSize = 10;
-          const hasMore = response.data.timeline.length >= defaultPageSize;
+          const hasMore = response.data.length >= defaultPageSize;
           setPagination(prev => ({
             currentPage: page,
             totalPages: prev.totalPages,
@@ -447,57 +458,23 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
             hasNext: hasMore,
             hasPrev: page > 1,
           }));
-        }
-      } else if (response && Array.isArray(response)) {
-        if (page === 1) {
-          setApiTimelineData(response);
         } else {
-          setApiTimelineData(prevData => [...prevData, ...response]);
+          console.log('Unexpected response structure:', response);
+          setError('Unexpected response format from server');
         }
-
-        const defaultPageSize = 10;
-        const hasMore = response.length >= defaultPageSize;
-        setPagination(prev => ({
-          currentPage: page,
-          totalPages: prev.totalPages,
-          totalItems: prev.totalItems,
-          hasNext: hasMore,
-          hasPrev: page > 1,
-        }));
-      } else if (response && response.data && Array.isArray(response.data)) {
-        if (page === 1) {
-          setApiTimelineData(response.data);
-        } else {
-          setApiTimelineData(prevData => [...prevData, ...response.data]);
-        }
-
-        const defaultPageSize = 10;
-        const hasMore = response.data.length >= defaultPageSize;
-        setPagination(prev => ({
-          currentPage: page,
-          totalPages: prev.totalPages,
-          totalItems: prev.totalItems,
-          hasNext: hasMore,
-          hasPrev: page > 1,
-        }));
-      } else {
-        console.log('Unexpected response structure:', response);
-        setError('Unexpected response format from server');
-      }
-    } catch (err: any) {
-      setError('Failed to load timeline data');
-    } finally {
-      if (loadingMore) {
-        setLoadingMore(false);
-      } else {
+      } catch (err: any) {
+        setError('Failed to load timeline data');
+      } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
-    }
-  };
+    },
+    [propTimelineData],
+  );
 
   useEffect(() => {
     loadTimelineData(1);
-  }, [refreshTrigger, userId]);
+  }, [refreshTrigger, userId, loadTimelineData]);
 
   const timelineData = propTimelineData || apiTimelineData;
 
@@ -644,7 +621,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
         setIsUniversalModalOpen(true);
       }
     },
-    [fetchDetailedData],
+    [fetchDetailedData, getMonthName],
   );
 
   const navigation = useNavigation<any>();
@@ -746,7 +723,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
     return (
       <View style={styles.draftSection}>
         {/* <Text style={styles.draftTitle}>Draft</Text> */}
-        {unverifiedCompanies.map((timelineCompany, index) =>
+        {unverifiedCompanies.map(timelineCompany =>
           renderCompanyItem(
             timelineCompany,
             timelineData.indexOf(timelineCompany),
@@ -803,24 +780,6 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
           source={require('../assets/icons/verify.png')}
           style={styles.actionIcon}
         />
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderEditButton = (
-    item: Position | Achievement,
-    type: 'position' | 'achievement',
-  ) => (
-    <View style={styles.editButtonContainer}>
-      <TouchableOpacity
-        style={styles.editButton}
-        onPress={() => handleEditItem(item, type)}
-      >
-        <Image
-          source={require('../assets/icons/edit.png')}
-          style={styles.editIcon}
-        />
-        <Text style={styles.editButtonText}>Edit</Text>
       </TouchableOpacity>
     </View>
   );
@@ -1985,7 +1944,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
       <LikesModal
         visible={likesModalVisible}
         onClose={() => setLikesModalVisible(false)}
-        timelineId={currentItemId ? Number(currentItemId) : undefined}
+        timelineId={currentItemId ?? undefined}
         entityType={
           currentItemType === 'achievement' ? 'achievement' : 'position'
         }
@@ -1994,7 +1953,7 @@ const ProfileTimeline: React.FC<ProfileTimelineProps> = ({
         visible={commentsModalVisible}
         onClose={() => setCommentsModalVisible(false)}
         isAddingComment={isAddingComment}
-        timelineId={currentItemId ? Number(currentItemId) : undefined}
+        timelineId={currentItemId ?? undefined}
         entityType={
           currentItemType === 'achievement' ? 'achievement' : 'position'
         }

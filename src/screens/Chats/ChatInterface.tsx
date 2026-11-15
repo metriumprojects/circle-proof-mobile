@@ -1,194 +1,594 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   FlatList,
-  TouchableOpacity,
-  TextInput,
-  SafeAreaView,
   Image,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
+import {
+  ChatMessage,
+  ChatThread,
+  ChatUser,
+  deleteChatThread,
+  fetchChatMessages,
+  fetchChatThreads,
+  fetchProfile,
+  fetchSpecificUserProfileStats,
+  getOrCreateChatThread,
+  pinChatThread,
+  sendChatMessage,
+  spamChatThread,
+} from '../../api/service';
+import { getChatSocket } from '../../lib/chatSocket';
 
-// Mock data for different users and their chat messages
-const mockUsers = {
-  '1': {
-    id: '1',
-    name: 'Emery Lipshutz',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face',
-    isOnline: true,
-  },
-  '2': {
-    id: '2',
-    name: 'Paul Matusin',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-    isOnline: false,
-  },
-  '3': {
-    id: '3',
-    name: 'Sarah Johnson',
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b5c99cf5?w=40&h=40&fit=crop&crop=face',
-    isOnline: true,
-  },
+type UIMessage = ChatMessage & {
+  pending?: boolean;
+  failed?: boolean;
 };
 
-const mockChatMessages = {
-  '1': [
-    {
-      id: '1',
-      senderId: '3',
-      senderName: 'Paul Gimes',
-      message: 'Hi I\'m interested in a lesson with you. But I have a few questions',
-      time: '11:55 PM',
-      timestamp: new Date('2024-05-29T23:55:00'),
-      isCurrentUser: false,
-    },
-    {
-      id: '2',
-      senderId: 'current',
-      senderName: 'You',
-      message: 'Hi nice to meet you.',
-      time: '11:56 PM',
-      timestamp: new Date('2024-05-29T23:56:00'),
-      isCurrentUser: true,
-    },
-    {
-      id: '3',
-      senderId: '3',
-      senderName: 'Paul Gimes',
-      message: 'I would like to know if we could focus the session on youtube seo?',
-      time: '01:00 AM',
-      timestamp: new Date('2024-05-30T01:00:00'),
-      isCurrentUser: false,
-    },
-  ],
-  '2': [
-    {
-      id: '1',
-      senderId: '2',
-      senderName: 'Paul Matusin',
-      message: 'Hey! How are you doing?',
-      time: '10:30 AM',
-      timestamp: new Date('2024-05-29T10:30:00'),
-      isCurrentUser: false,
-    },
-    {
-      id: '2',
-      senderId: 'current',
-      senderName: 'You',
-      message: 'I\'m good! Thanks for asking. How about you?',
-      time: '10:35 AM',
-      timestamp: new Date('2024-05-29T10:35:00'),
-      isCurrentUser: true,
-    },
-  ],
-  '3': [
-    {
-      id: '1',
-      senderId: '3',
-      senderName: 'Sarah Johnson',
-      message: 'Can we schedule a meeting for tomorrow?',
-      time: '2:15 PM',
-      timestamp: new Date('2024-05-29T14:15:00'),
-      isCurrentUser: false,
-    },
-  ],
+export interface ChatInterfaceProps {
+  userId?: string | number;
+  threadId?: string | number;
+  otherUser?: ChatUser | null;
+  initialPinned?: boolean;
+  onBack?: () => void;
+  onThreadUpdated?: () => void;
+  route?: {
+    params?: {
+      userId?: string | number;
+      threadId?: string | number;
+      otherUser?: ChatUser | null;
+      initialPinned?: boolean;
+    };
+  };
+}
+
+interface SendMessageAck {
+  ok?: boolean;
+  message?: ChatMessage;
+  error?: string;
+}
+
+const formatDateLabel = (dateInput?: string | Date) => {
+  if (!dateInput) {
+    return '';
+  }
+  const messageDate = new Date(dateInput);
+  if (Number.isNaN(messageDate.getTime())) {
+    return '';
+  }
+  const today = new Date();
+  if (messageDate.toDateString() === today.toDateString()) {
+    return 'Today';
+  }
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (messageDate.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  }
+  return messageDate.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+  });
 };
 
-const ChatInterface = ({ userId, onBack }) => {
+const formatMessageTime = (dateInput?: string | Date) => {
+  if (!dateInput) {
+    return '';
+  }
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const ChatInterface: React.FC<ChatInterfaceProps> = props => {
+  const navigation = useNavigation<any>();
+  const hookRoute = useRoute<any>();
+  const routeParams = props.route?.params ?? hookRoute?.params ?? {};
+
+  const targetUserId = props.userId ?? routeParams.userId;
+  const initialThreadId = props.threadId ?? routeParams.threadId;
+  const initialOtherUser = props.otherUser ?? routeParams.otherUser ?? null;
+  const { onBack, onThreadUpdated } = props;
+
+  const [activeThreadId, setActiveThreadId] = useState<string | number | null>(
+    initialThreadId ?? null,
+  );
+  const [peerUser, setPeerUser] = useState<ChatUser | null>(initialOtherUser);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   const [messageInput, setMessageInput] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showChatTooltip, setShowChatTooltip] = useState(false);
+  const [isPinned, setIsPinned] = useState(
+    Boolean(props.initialPinned ?? routeParams.initialPinned),
+  );
+
+  const flatListRef = useRef<FlatList<UIMessage> | null>(null);
+  const onThreadUpdatedRef = useRef(onThreadUpdated);
+  onThreadUpdatedRef.current = onThreadUpdated;
+  const initialOtherUserRef = useRef(initialOtherUser);
+  initialOtherUserRef.current = initialOtherUser;
+
+  const handleBack = useCallback(() => {
+    if (onBack) {
+      onBack();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  }, [navigation, onBack]);
 
   useEffect(() => {
-    // Load user data and messages for the specific userId
-    if (userId && mockUsers[userId]) {
-      setUser(mockUsers[userId]);
-      setMessages(mockChatMessages[userId] || []);
+    if (initialThreadId != null) {
+      setActiveThreadId(initialThreadId);
     }
-  }, [userId]);
+  }, [initialThreadId]);
 
-  const sendMessage = () => {
-    if (messageInput.trim()) {
-      const newMessage = {
-        id: Date.now().toString(),
-        senderId: 'current',
-        senderName: 'You',
-        message: messageInput.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date(),
-        isCurrentUser: true,
-      };
+  useEffect(() => {
+    if (initialOtherUser) {
+      setPeerUser(initialOtherUser);
+    }
+  }, [initialOtherUser]);
 
-      setMessages(prevMessages => [...prevMessages, newMessage]);
-      setMessageInput('');
+  // Resolve current authenticated Mongo user ID
+  useEffect(() => {
+    let cancelled = false;
+    const loadMe = async () => {
+      try {
+        const res = await fetchProfile();
+        const profile = res?.data?.data?.user || res?.data?.data || res?.data;
+        const resolvedId = profile?.id ?? profile?._id ?? profile?.userId;
+        if (!cancelled && resolvedId != null) {
+          setCurrentUserId(String(resolvedId));
+        }
+      } catch {
+        // Fallback comparison with peerUserId handles alignment
+      }
+    };
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Resolve threadId, peer profile metadata, and initial messages
+  useEffect(() => {
+    let cancelled = false;
+
+    const initializeConversation = async () => {
+      if (initialThreadId == null && targetUserId == null) {
+        setErrorMsg('Conversation user not specified.');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setErrorMsg(null);
+
+      try {
+        let resolvedThreadId: string | number | null = initialThreadId ?? null;
+
+        if (resolvedThreadId == null && targetUserId != null) {
+          const threadRes = await getOrCreateChatThread(targetUserId);
+          const threadPayload =
+            threadRes?.data?.data || threadRes?.data;
+          resolvedThreadId = threadPayload?.id ?? threadPayload?._id ?? null;
+          if (!cancelled && threadPayload?.isPinned != null) {
+            setIsPinned(Boolean(threadPayload.isPinned));
+          }
+        }
+
+        if (resolvedThreadId == null) {
+          throw new Error('Could not initialize conversation');
+        }
+
+        if (!cancelled) {
+          setActiveThreadId(resolvedThreadId);
+        }
+
+        // Load messages
+        const messagesRes = await fetchChatMessages(resolvedThreadId, 1, 50);
+        const rows: ChatMessage[] =
+          messagesRes?.data?.data?.messages || [];
+        if (!cancelled) {
+          setMessages([...rows].reverse());
+          onThreadUpdatedRef.current?.();
+        }
+
+        // Populate peer user info if missing fullName/avatar
+        if (!initialOtherUserRef.current?.fullName) {
+          try {
+            const threadsRes = await fetchChatThreads();
+            const threads: ChatThread[] = threadsRes?.data?.data || [];
+            const matchedThread = threads.find(
+              t =>
+                String(t.id) === String(resolvedThreadId) ||
+                (targetUserId != null &&
+                  String(t.otherUserId) === String(targetUserId)),
+            );
+            if (!cancelled && matchedThread) {
+              setIsPinned(Boolean(matchedThread.isPinned));
+              if (matchedThread.otherUser) {
+                setPeerUser(matchedThread.otherUser);
+                return;
+              }
+            }
+          } catch {
+            // Try stats endpoint next
+          }
+
+          if (targetUserId != null) {
+            try {
+              const statsRes = await fetchSpecificUserProfileStats(targetUserId);
+              const stats = statsRes?.data?.data?.stats;
+              if (!cancelled && stats) {
+                setPeerUser({
+                  id: stats.userId ?? targetUserId,
+                  fullName: stats.fullName,
+                  username: stats.username ?? undefined,
+                  profilePicture: stats.profilePicture ?? undefined,
+                });
+              }
+            } catch {
+              // Keep minimal placeholder derived from userId
+            }
+          }
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          const msg =
+            err?.response?.data?.message ||
+            err?.message ||
+            'Failed to load conversation';
+          setErrorMsg(msg);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialThreadId, targetUserId]);
+
+  // Real-time Socket.IO room join and message updates
+  useEffect(() => {
+    if (activeThreadId == null) {
+      return;
+    }
+
+    let isMounted = true;
+    let activeSocket: any = null;
+    const threadKey = String(activeThreadId);
+
+    const handleNewMessage = (incoming: ChatMessage) => {
+      if (!isMounted || !incoming) {
+        return;
+      }
+      if (String(incoming.conversationId) !== threadKey) {
+        return;
+      }
+
+      setMessages(prev => {
+        if (prev.some(m => String(m.id) === String(incoming.id))) {
+          return prev;
+        }
+        const withoutPending = prev.filter(
+          m =>
+            !(
+              m.pending &&
+              m.body === incoming.body &&
+              String(m.conversationId) === threadKey
+            ),
+        );
+        return [...withoutPending, incoming];
+      });
+      onThreadUpdatedRef.current?.();
+    };
+
+    const joinThread = () => {
+      if (activeSocket?.connected) {
+        activeSocket.emit('join:thread', threadKey);
+      }
+    };
+
+    getChatSocket()
+      .then(socket => {
+        if (!isMounted) {
+          return;
+        }
+        activeSocket = socket;
+        socket.on('message:new', handleNewMessage);
+        socket.on('connect', joinThread);
+        if (socket.connected) {
+          socket.emit('join:thread', threadKey);
+        }
+      })
+      .catch(err => {
+        console.warn('[ChatInterface] Socket init warning:', err);
+      });
+
+    return () => {
+      isMounted = false;
+      if (activeSocket) {
+        activeSocket.off('message:new', handleNewMessage);
+        activeSocket.off('connect', joinThread);
+        if (activeSocket.connected) {
+          activeSocket.emit('leave:thread', threadKey);
+        }
+      }
+    };
+  }, [activeThreadId]);
+
+  const sendViaRest = async (threadKey: string | number, body: string, tempId: string) => {
+    const res = await sendChatMessage(threadKey, body);
+    const raw = res?.data?.data;
+    const savedMsg: ChatMessage | undefined = raw?.message || raw;
+    if (savedMsg) {
+      setMessages(prev => {
+        const exists = prev.some(m => String(m.id) === String(savedMsg.id));
+        if (exists) {
+          return prev.filter(m => m.id !== tempId);
+        }
+        return prev.map(m => (m.id === tempId ? savedMsg : m));
+      });
+    } else {
+      setMessages(prev =>
+        prev.map(m => (m.id === tempId ? { ...m, pending: false } : m)),
+      );
+    }
+    onThreadUpdatedRef.current?.();
+  };
+
+  const handleSendMessage = async () => {
+    const body = messageInput.trim();
+    if (!body || activeThreadId == null || sending) {
+      return;
+    }
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: UIMessage = {
+      id: tempId,
+      body,
+      senderId: currentUserId || 'current',
+      conversationId: activeThreadId,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    setMessageInput('');
+    setSending(true);
+
+    try {
+      const socket = await getChatSocket();
+      if (socket.connected) {
+        await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const timer = setTimeout(async () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            try {
+              await sendViaRest(activeThreadId, body, tempId);
+              resolve();
+            } catch (restErr) {
+              reject(restErr);
+            }
+          }, 3000);
+
+          socket.emit(
+            'message:send',
+            { threadId: String(activeThreadId), body },
+            async (ack: SendMessageAck) => {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              clearTimeout(timer);
+              if (ack?.ok && ack.message) {
+                const confirmed = ack.message;
+                setMessages(prev => {
+                  const alreadyAdded = prev.some(
+                    m => String(m.id) === String(confirmed.id),
+                  );
+                  if (alreadyAdded) {
+                    return prev.filter(m => m.id !== tempId);
+                  }
+                  return prev.map(m => (m.id === tempId ? confirmed : m));
+                });
+                onThreadUpdatedRef.current?.();
+                resolve();
+              } else {
+                try {
+                  await sendViaRest(activeThreadId, body, tempId);
+                  resolve();
+                } catch (restErr) {
+                  reject(restErr);
+                }
+              }
+            },
+          );
+        });
+      } else {
+        await sendViaRest(activeThreadId, body, tempId);
+      }
+    } catch (err: any) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === tempId ? { ...m, pending: false, failed: true } : m,
+        ),
+      );
+      Toast.show({
+        type: 'error',
+        text1: 'Message failed',
+        text2:
+          err?.response?.data?.message || 'Could not deliver message. Please try again.',
+      });
+    } finally {
+      setSending(false);
     }
   };
 
-  const formatDate = (date) => {
-    const today = new Date();
-    const messageDate = new Date(date);
-    
-    if (messageDate.toDateString() === today.toDateString()) {
-      return 'Today';
+  const handleChatAction = async (action: 'pin' | 'spam' | 'delete') => {
+    setShowChatTooltip(false);
+    if (activeThreadId == null) {
+      return;
     }
-    
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    if (messageDate.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
+    try {
+      if (action === 'pin') {
+        const nextPinned = !isPinned;
+        await pinChatThread(activeThreadId, nextPinned);
+        setIsPinned(nextPinned);
+        Toast.show({
+          type: 'success',
+          text1: nextPinned ? 'Conversation pinned' : 'Conversation unpinned',
+        });
+        onThreadUpdatedRef.current?.();
+      } else if (action === 'spam') {
+        await spamChatThread(activeThreadId);
+        Toast.show({
+          type: 'success',
+          text1: 'Marked as spam',
+        });
+        onThreadUpdatedRef.current?.();
+        handleBack();
+      } else if (action === 'delete') {
+        await deleteChatThread(activeThreadId);
+        Toast.show({
+          type: 'success',
+          text1: 'Conversation deleted',
+        });
+        onThreadUpdatedRef.current?.();
+        handleBack();
+      }
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Action failed',
+        text2: err?.response?.data?.message || 'Please try again.',
+      });
     }
-    
-    return messageDate.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric' 
-    });
   };
 
-  const ChatMessage = ({ item, index }) => {
-    const showDateSeparator = index === 0 || 
-      new Date(messages[index - 1].timestamp).toDateString() !== 
-      new Date(item.timestamp).toDateString();
+  const peerId = peerUser?.id ?? targetUserId;
+  const peerName =
+    peerUser?.fullName || peerUser?.username || peerUser?.email || 'Conversation';
+  const peerInitial = peerName.charAt(0).toUpperCase();
+
+  const isOwnMessage = useCallback(
+    (item: UIMessage) => {
+      if (item.pending || item.senderId === 'current') {
+        return true;
+      }
+      if (currentUserId) {
+        return String(item.senderId) === currentUserId;
+      }
+      if (peerId != null) {
+        return String(item.senderId) !== String(peerId);
+      }
+      return false;
+    },
+    [currentUserId, peerId],
+  );
+
+  const renderedMessages = useMemo(() => messages, [messages]);
+
+  const renderMessageItem = ({
+    item,
+    index,
+  }: {
+    item: UIMessage;
+    index: number;
+  }) => {
+    const prevMsg = index > 0 ? renderedMessages[index - 1] : null;
+    const showDateSeparator =
+      !prevMsg ||
+      new Date(prevMsg.createdAt).toDateString() !==
+        new Date(item.createdAt).toDateString();
+
+    const own = isOwnMessage(item);
+    const senderDisplayName =
+      item.sender?.fullName || item.sender?.username || peerName;
+    const senderInitial = senderDisplayName.charAt(0).toUpperCase();
+    const timeText = formatMessageTime(item.createdAt);
 
     return (
       <View>
         {showDateSeparator && (
           <View style={styles.dateHeader}>
-            <Text style={styles.dateText}>
-              {formatDate(item.timestamp)}, {new Date(item.timestamp).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-            </Text>
+            <Text style={styles.dateText}>{formatDateLabel(item.createdAt)}</Text>
           </View>
         )}
-        <View style={[
-          styles.chatMessageContainer,
-          item.isCurrentUser ? styles.currentUserMessage : styles.otherUserMessage
-        ]}>
-          {!item.isCurrentUser && (
+        <View
+          style={[
+            styles.chatMessageContainer,
+            own ? styles.currentUserMessage : styles.otherUserMessage,
+          ]}
+        >
+          {!own ? (
             <View style={styles.senderInfo}>
-              <View style={styles.senderAvatar}>
-                <Text style={styles.senderInitial}>
-                  {item.senderName.charAt(0)}
-                </Text>
-              </View>
+              {item.sender?.profilePicture || peerUser?.profilePicture ? (
+                <Image
+                  source={{
+                    uri:
+                      (item.sender?.profilePicture ||
+                        peerUser?.profilePicture) as string,
+                  }}
+                  style={styles.senderAvatarImage}
+                />
+              ) : (
+                <View style={styles.senderAvatar}>
+                  <Text style={styles.senderInitial}>{senderInitial}</Text>
+                </View>
+              )}
               <View style={styles.messageWrapper}>
-                <Text style={styles.senderName}>{item.senderName}</Text>
-                <Text style={styles.messageTime}>{item.time}</Text>
+                <Text style={styles.senderName}>{senderDisplayName}</Text>
+                <Text style={styles.messageTime}>{timeText}</Text>
                 <View style={styles.chatBubble}>
-                  <Text style={styles.chatMessageText}>{item.message}</Text>
+                  <Text style={styles.chatMessageText}>{item.body}</Text>
                 </View>
               </View>
             </View>
-          )}
-          {item.isCurrentUser && (
+          ) : (
             <View style={styles.currentUserMessageWrapper}>
-              <View style={[styles.chatBubble, styles.currentUserBubble]}>
+              <View
+                style={[
+                  styles.chatBubble,
+                  styles.currentUserBubble,
+                  item.failed && styles.failedBubble,
+                ]}
+              >
                 <Text style={[styles.chatMessageText, styles.currentUserText]}>
-                  {item.message}
+                  {item.body}
                 </Text>
               </View>
+              <Text style={styles.ownMessageTime}>
+                {item.pending
+                  ? 'Sending...'
+                  : item.failed
+                    ? 'Failed to send'
+                    : timeText}
+              </Text>
             </View>
           )}
         </View>
@@ -196,68 +596,153 @@ const ChatInterface = ({ userId, onBack }) => {
     );
   };
 
-  if (!user) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>User not found</Text>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Image
+              source={require('../../assets/icons/back.png')}
+              style={styles.backIcon}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.stateText}>Loading conversation...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Image
+              source={require('../../assets/icons/back.png')}
+              style={styles.backIcon}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={styles.centerState}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Image source={require('../../assets/icons/back.png')} style={styles.backIcon} />
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Image
+              source={require('../../assets/icons/back.png')}
+              style={styles.backIcon}
+            />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Messages</Text>
         </View>
-        
-        {/* Chat Header with User Info */}
+
+        {/* Chat Header with Peer Info */}
         <View style={styles.chatHeader}>
-          <Image source={{ uri: user.avatar }} style={styles.chatAvatar} />
+          {peerUser?.profilePicture ? (
+            <Image
+              source={{ uri: peerUser.profilePicture }}
+              style={styles.chatAvatar}
+            />
+          ) : (
+            <View style={styles.chatAvatarFallback}>
+              <Text style={styles.chatAvatarInitial}>{peerInitial}</Text>
+            </View>
+          )}
           <View style={styles.chatHeaderInfo}>
             <View style={styles.userNameContainer}>
-              <Text style={styles.chatHeaderName}>{user.name}</Text>
-              {user.isOnline && <View style={styles.onlineIndicator} />}
+              <Text style={styles.chatHeaderName} numberOfLines={1}>
+                {peerName}
+              </Text>
+              {isPinned && <Text style={styles.pinnedBadge}>Pinned</Text>}
             </View>
-            <TouchableOpacity>
-              <Text style={styles.seeProfile}>👁 See profile</Text>
-            </TouchableOpacity>
+            {peerId != null && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ProfileView', { userId: peerId })}
+              >
+                <Text style={styles.seeProfile}>See profile</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <TouchableOpacity style={styles.moreOptionsButton}>
-            <Text style={styles.moreOptionsText}>⋯</Text>
-          </TouchableOpacity>
+          <View style={styles.moreMenuContainer}>
+            <TouchableOpacity
+              style={styles.moreOptionsButton}
+              onPress={() => setShowChatTooltip(prev => !prev)}
+            >
+              <Text style={styles.moreOptionsText}>⋯</Text>
+            </TouchableOpacity>
+            {showChatTooltip && (
+              <View style={styles.chatTooltip}>
+                <TouchableOpacity
+                  style={styles.tooltipItem}
+                  onPress={() => handleChatAction('pin')}
+                >
+                  <Text style={styles.tooltipText}>
+                    {isPinned ? 'Unpin chat' : 'Pin conversation'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.tooltipItem}
+                  onPress={() => handleChatAction('spam')}
+                >
+                  <Text style={styles.tooltipText}>Mark as spam</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tooltipItem, styles.tooltipItemLast]}
+                  onPress={() => handleChatAction('delete')}
+                >
+                  <Text style={[styles.tooltipText, styles.dangerText]}>
+                    Delete chat
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Messages List */}
         <FlatList
-          data={messages}
-          renderItem={({ item, index }) => <ChatMessage item={item} index={index} />}
-          keyExtractor={(item) => item.id}
+          ref={flatListRef}
+          data={renderedMessages}
+          renderItem={renderMessageItem}
+          keyExtractor={item => String(item.id)}
           style={styles.chatMessagesList}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.messagesContainer}
+          contentContainerStyle={[
+            styles.messagesContainer,
+            renderedMessages.length === 0 && styles.emptyMessagesContainer,
+          ]}
+          onContentSizeChange={() => {
+            if (renderedMessages.length > 0) {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }
+          }}
+          ListEmptyComponent={
+            <View style={styles.centerState}>
+              <Text style={styles.stateText}>
+                No messages yet. Say hello to {peerName}!
+              </Text>
+            </View>
+          }
         />
 
         {/* Input Section */}
         <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TouchableOpacity style={styles.attachButton}>
-              <Text style={styles.attachIcon}>📎</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cameraButton}>
-              <Text style={styles.cameraIcon}>📷</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.micButton}>
-              <Text style={styles.micIcon}>🎤</Text>
-            </TouchableOpacity>
-          </View>
           <View style={styles.messageInputContainer}>
             <TextInput
               style={styles.messageInput}
@@ -266,14 +751,24 @@ const ChatInterface = ({ userId, onBack }) => {
               value={messageInput}
               onChangeText={setMessageInput}
               multiline
-              maxLength={1000}
+              maxLength={2000}
             />
-            <TouchableOpacity 
-              style={[styles.sendButton, messageInput.trim() && styles.sendButtonActive]} 
-              onPress={sendMessage}
-              disabled={!messageInput.trim()}
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                Boolean(messageInput.trim()) && styles.sendButtonActive,
+              ]}
+              onPress={handleSendMessage}
+              disabled={!messageInput.trim() || sending}
             >
-              <Text style={[styles.sendIcon, messageInput.trim() && styles.sendIconActive]}>➤</Text>
+              <Text
+                style={[
+                  styles.sendIcon,
+                  Boolean(messageInput.trim()) && styles.sendIconActive,
+                ]}
+              >
+                ➤
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -298,11 +793,14 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: 16,
   },
-
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#000',
+  },
+  backIcon: {
+    height: 24,
+    width: 24,
   },
   chatHeader: {
     flexDirection: 'row',
@@ -312,12 +810,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
     backgroundColor: '#fff',
+    zIndex: 10,
   },
   chatAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     marginRight: 12,
+  },
+  chatAvatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chatAvatarInitial: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   chatHeaderInfo: {
     flex: 1,
@@ -333,22 +846,62 @@ const styles = StyleSheet.create({
     color: '#000',
     marginRight: 6,
   },
-  onlineIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
+  pinnedBadge: {
+    fontSize: 11,
+    color: '#007AFF',
+    backgroundColor: '#EBF4FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   seeProfile: {
     fontSize: 12,
-    color: '#666',
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  moreMenuContainer: {
+    position: 'relative',
   },
   moreOptionsButton: {
     padding: 8,
   },
   moreOptionsText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#666',
+  },
+  chatTooltip: {
+    position: 'absolute',
+    right: 0,
+    top: 38,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 4,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    zIndex: 100,
+  },
+  tooltipItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  tooltipItemLast: {
+    borderBottomWidth: 0,
+  },
+  tooltipText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  dangerText: {
+    color: '#D32F2F',
   },
   dateHeader: {
     alignItems: 'center',
@@ -368,6 +921,10 @@ const styles = StyleSheet.create({
   messagesContainer: {
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  emptyMessagesContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   chatMessageContainer: {
     marginVertical: 4,
@@ -393,6 +950,13 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginTop: 4,
   },
+  senderAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+    marginTop: 4,
+  },
   senderInitial: {
     color: '#fff',
     fontSize: 14,
@@ -411,6 +975,11 @@ const styles = StyleSheet.create({
     color: '#999',
     marginBottom: 4,
   },
+  ownMessageTime: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 2,
+  },
   chatBubble: {
     backgroundColor: '#f0f0f0',
     paddingHorizontal: 12,
@@ -427,6 +996,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     marginLeft: 40,
   },
+  failedBubble: {
+    backgroundColor: '#D32F2F',
+  },
   chatMessageText: {
     fontSize: 14,
     color: '#000',
@@ -441,32 +1013,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  attachButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  attachIcon: {
-    fontSize: 18,
-  },
-  cameraButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  cameraIcon: {
-    fontSize: 18,
-  },
-  micButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  micIcon: {
-    fontSize: 18,
   },
   messageInputContainer: {
     flexDirection: 'row',
@@ -500,17 +1046,23 @@ const styles = StyleSheet.create({
   sendIconActive: {
     color: '#007AFF',
   },
-  errorText: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 50,
+  centerState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
-  backIcon : {
-    fontSize: 24,
-    color: '#000',
-    height: 24,
-    width: 24
+  stateText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#D32F2F',
+    textAlign: 'center',
   },
 });
 

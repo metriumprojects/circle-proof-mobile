@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -22,10 +21,9 @@ import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -180,7 +178,9 @@ const ProfileHobby = () => {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pagination, setPagination] = useState<Pagination>({
@@ -203,12 +203,12 @@ const ProfileHobby = () => {
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'hobby') => {
+    (itemId: number | string, increment: number, type: string = 'hobby') => {
       setHobbyGroups(prevGroups => {
         return prevGroups.map(group => ({
           ...group,
           entries: group.entries.map(entry => {
-            if (type === 'hobby' && entry.id === itemId) {
+            if (type === 'hobby' && String(entry.id) === String(itemId)) {
               return {
                 ...entry,
                 commentsCount: entry.commentsCount + increment,
@@ -220,7 +220,7 @@ const ProfileHobby = () => {
               entry.achievements.length > 0
             ) {
               const updatedAchievements = entry.achievements.map(ach => {
-                if (Number(ach.id) === Number(itemId)) {
+                if (String(ach.id) === String(itemId)) {
                   return {
                     ...ach,
                     stats: {
@@ -237,7 +237,7 @@ const ProfileHobby = () => {
 
               // Check if any achievement was actually updated
               const isAchievementUpdated = entry.achievements.some(
-                ach => Number(ach.id) === Number(itemId),
+                ach => String(ach.id) === String(itemId),
               );
 
               if (isAchievementUpdated) {
@@ -252,14 +252,14 @@ const ProfileHobby = () => {
     [],
   );
 
-  const handleLike = async (id: number, type: string = 'hobby') => {
+  const handleLike = async (id: number | string, type: string = 'hobby') => {
     try {
       // Optimistically update the UI before making the API call
       setHobbyGroups(prevGroups => {
         return prevGroups.map(group => ({
           ...group,
           entries: group.entries.map(entry => {
-            if (type === 'hobby' && entry.id === id) {
+            if (type === 'hobby' && String(entry.id) === String(id)) {
               const newIsLiked = !entry.isLiked;
               const newLikesCount = newIsLiked
                 ? entry.likesCount + 1
@@ -272,7 +272,7 @@ const ProfileHobby = () => {
             }
             if (entry.achievements) {
               const updatedAchievements = entry.achievements.map(ach => {
-                if (type === 'achievement' && ach.id === id) {
+                if (type === 'achievement' && String(ach.id) === String(id)) {
                   const newIsLiked = !ach.isLiked;
                   const newLikesCount = newIsLiked
                     ? (ach.stats?.likesCount || 0) + 1
@@ -297,9 +297,9 @@ const ProfileHobby = () => {
 
       // Make the API call to update the like status on the server
       if (type === 'hobby') {
-        await addHobbyLikeUnlike(id);
+        await addHobbyLikeUnlike(id as any);
       } else if (type === 'achievement') {
-        const response = await toggleLikeSectionAchievement(id);
+        const response = await toggleLikeSectionAchievement(id as any);
         console.log('Achievement like response:', response.data);
       }
     } catch (error) {
@@ -309,7 +309,7 @@ const ProfileHobby = () => {
     }
   };
 
-  const handleStatsPress = (id: number, type: string = 'hobby') => {
+  const handleStatsPress = (id: number | string, type: string = 'hobby') => {
     setCurrentItemId(id);
     setCurrentItemType(type);
   };
@@ -317,7 +317,6 @@ const ProfileHobby = () => {
   console.log('currentItemId:', currentItemId);
 
   const handleSelect = (selected: any) => {
-    setSelectedValue(selected);
     console.log('Selected:', selected);
     if (selected.value === 'hobby') {
       setModalType('hobby');
@@ -327,7 +326,6 @@ const ProfileHobby = () => {
     }
   };
 
-  const [selectedValue, setSelectedValue] = useState(null);
   const [expandedDescriptions, setExpandedDescriptions] = useState<{
     [key: number]: boolean;
   }>({});
@@ -403,7 +401,7 @@ const ProfileHobby = () => {
         setIsUniversalModalOpen(true);
       } else {
         const hobbyItem = item as HobbyEntry;
-        const response = await getHobbyById(Number(hobbyItem.id));
+        const response = await getHobbyById(hobbyItem.id as any);
         if (response.data && response.data.success) {
           const hobbyData = response.data.data.userHobby;
           console.log('Fetched Hobby Data:', hobbyData);
@@ -447,7 +445,7 @@ const ProfileHobby = () => {
     }
   };
 
-  const handleAddAchievement = (hobbyId: number) => {
+  const handleAddAchievement = (hobbyId: number | string) => {
     setModalType('achievement');
     setAchievementType('hobby');
     setInitialData({ referenceId: hobbyId });
@@ -482,11 +480,8 @@ const ProfileHobby = () => {
     } catch (error) {
       console.error('Error fetching hobbies:', error);
     } finally {
-      if (loadingMore) {
-        setLoadingMore(false);
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
@@ -1132,8 +1127,8 @@ const ProfileHobby = () => {
               <TouchableOpacity
                 style={styles.statIconContainer}
                 onPress={() => {
-                  handleStatsPress(Number(entry.id));
-                  handleLike(Number(entry.id));
+                  handleStatsPress(entry.id);
+                  handleLike(entry.id);
                 }}
               >
                 <Image
@@ -1148,7 +1143,7 @@ const ProfileHobby = () => {
               <TouchableOpacity
                 style={styles.statCountContainer}
                 onPress={() => {
-                  handleStatsPress(Number(entry.id));
+                  handleStatsPress(entry.id);
                   setLikesModalVisible(true);
                 }}
               >
@@ -1159,7 +1154,7 @@ const ProfileHobby = () => {
             <TouchableOpacity
               style={styles.commentContainer}
               onPress={() => {
-                handleStatsPress(Number(entry.id));
+                handleStatsPress(entry.id);
                 setIsAddingComment(true); // Always show input in modal
                 setCommentsModalVisible(true);
               }}

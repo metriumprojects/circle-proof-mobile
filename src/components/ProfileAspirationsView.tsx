@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,22 +9,19 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import {
   fetchAspirationsByUserId,
   fetchMyAspirations,
   addAspirationLikeUnlike,
   toggleLikeSectionAchievement,
 } from '../api/service';
-import { useState, useEffect } from 'react';
 import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -111,20 +108,21 @@ interface Pagination {
 }
 
 interface ProfileAspirationsViewProps {
-  userId?: number;
+  userId?: number | string;
 }
 
 const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
   userId,
 }) => {
-  const navigation = useNavigation<any>();
   const [aspirationsData, setAspirationsData] = useState<AspirationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [currentItemType, setCurrentItemType] = useState<
     'aspiration' | 'achievement' | null
   >(null);
@@ -132,7 +130,6 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
     [key: string]: boolean;
   }>({});
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [expandedValidations, setExpandedValidations] = useState<{
     [key: string]: boolean;
   }>({});
@@ -144,10 +141,17 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'aspiration') => {
+    (
+      itemId: number | string,
+      increment: number,
+      type: string = 'aspiration',
+    ) => {
       setAspirationsData(prevAspirations => {
         return prevAspirations.map(aspiration => {
-          if (type === 'aspiration' && parseInt(aspiration.id) === itemId) {
+          if (
+            type === 'aspiration' &&
+            String(aspiration.id) === String(itemId)
+          ) {
             return {
               ...aspiration,
               stats: {
@@ -162,7 +166,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
             aspiration.achievements.length > 0
           ) {
             const updatedAchievements = aspiration.achievements.map(ach => {
-              if (Number(ach.id) === Number(itemId)) {
+              if (String(ach.id) === String(itemId)) {
                 return {
                   ...ach,
                   stats: {
@@ -178,7 +182,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
 
             // Check if any achievement was actually updated
             const isAchievementUpdated = aspiration.achievements.some(
-              ach => Number(ach.id) === Number(itemId),
+              ach => String(ach.id) === String(itemId),
             );
 
             if (isAchievementUpdated) {
@@ -192,12 +196,15 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
     [],
   );
 
-  const handleLike = async (id: number, type: string = 'aspiration') => {
+  const handleLike = async (
+    id: number | string,
+    type: string = 'aspiration',
+  ) => {
     try {
       // Optimistically update the UI before making the API call
       setAspirationsData(prevAspirations => {
         return prevAspirations.map(aspiration => {
-          if (type === 'aspiration' && parseInt(aspiration.id) === id) {
+          if (type === 'aspiration' && String(aspiration.id) === String(id)) {
             const newIsLiked = !aspiration.isLiked;
             const newLikesCount = newIsLiked
               ? aspiration.stats.likesCount + 1
@@ -213,7 +220,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
           }
           if (aspiration.achievements) {
             const updatedAchievements = aspiration.achievements.map(ach => {
-              if (type === 'achievement' && ach.id === id) {
+              if (type === 'achievement' && String(ach.id) === String(id)) {
                 const newIsLiked = !ach.isLiked;
                 return {
                   ...ach,
@@ -236,9 +243,9 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
 
       // Make the API call to update the like status on the server
       if (type === 'aspiration') {
-        await addAspirationLikeUnlike(id);
+        await addAspirationLikeUnlike(id as any);
       } else if (type === 'achievement') {
-        const response = await toggleLikeSectionAchievement(id);
+        const response = await toggleLikeSectionAchievement(id as any);
         console.log('Achievement like response:', response.data);
       }
     } catch (error) {
@@ -247,87 +254,90 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
   };
 
   const handleStatsPress = (
-    id: number,
+    id: number | string,
     type: 'aspiration' | 'achievement' = 'aspiration',
   ) => {
     setCurrentItemId(id);
     setCurrentItemType(type);
   };
 
-  const loadAspirations = async (page: number = 1) => {
-    try {
-      if (page === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      let response;
-      if (userId) {
-        console.log('Fetching user aspirations for:', userId);
-        response = await fetchAspirationsByUserId(userId, page);
-      } else {
-        console.log('Fetching my aspirations (ProfileAspirationsView)...');
-        response = await fetchMyAspirations(page);
-      }
-
-      console.log(
-        'Aspirations response (View):',
-        JSON.stringify(response.data, null, 2),
-      );
-      if (response.data.success) {
-        const mappedData = response.data.data.aspirations.map((item: any) => {
-          const months = [
-            'Jan',
-            'Feb',
-            'Mar',
-            'Apr',
-            'May',
-            'Jun',
-            'Jul',
-            'Aug',
-            'Sep',
-            'Oct',
-            'Nov',
-            'Dec',
-          ];
-          const monthName = months[item.targetMonth - 1] || '';
-          return {
-            id: item.id.toString(),
-            title: item.goal,
-            period: `${monthName} ${item.targetYear}`,
-            description: item.whyItMatters,
-            stats: {
-              likesCount: item.likesCount || 0,
-              commentsCount: item.commentsCount || 0,
-            },
-            isLiked: item.isLiked,
-            isVerified: item.isVerified || false,
-            lastVerifiedAt: item.lastVerifiedAt || null,
-            verificationCount: item.verificationCount || 0,
-            validations: item.validations || [],
-            mediaUrl: item.mediaUrl,
-            achievements: item.achievements || [],
-          };
-        });
-        console.log('Mapped user data:', mappedData);
+  const loadAspirations = useCallback(
+    async (page: number = 1) => {
+      try {
         if (page === 1) {
-          setAspirationsData(mappedData);
+          setLoading(true);
         } else {
-          setAspirationsData(prev => [...prev, ...mappedData]);
+          setLoadingMore(true);
         }
-        setPagination(response.data.data);
+        let response;
+        if (userId) {
+          console.log('Fetching user aspirations for:', userId);
+          response = await fetchAspirationsByUserId(userId, page);
+        } else {
+          console.log('Fetching my aspirations (ProfileAspirationsView)...');
+          response = await fetchMyAspirations(page);
+        }
+
+        console.log(
+          'Aspirations response (View):',
+          JSON.stringify(response.data, null, 2),
+        );
+        if (response.data.success) {
+          const mappedData = response.data.data.aspirations.map((item: any) => {
+            const months = [
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec',
+            ];
+            const monthName = months[item.targetMonth - 1] || '';
+            return {
+              id: item.id.toString(),
+              title: item.goal,
+              period: `${monthName} ${item.targetYear}`,
+              description: item.whyItMatters,
+              stats: {
+                likesCount: item.likesCount || 0,
+                commentsCount: item.commentsCount || 0,
+              },
+              isLiked: item.isLiked,
+              isVerified: item.isVerified || false,
+              lastVerifiedAt: item.lastVerifiedAt || null,
+              verificationCount: item.verificationCount || 0,
+              validations: item.validations || [],
+              mediaUrl: item.mediaUrl,
+              achievements: item.achievements || [],
+            };
+          });
+          console.log('Mapped user data:', mappedData);
+          if (page === 1) {
+            setAspirationsData(mappedData);
+          } else {
+            setAspirationsData(prev => [...prev, ...mappedData]);
+          }
+          setPagination(response.data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching aspirations:', error);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-    } catch (error) {
-      console.error('Error fetching aspirations:', error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
+    },
+    [userId],
+  );
 
   useEffect(() => {
     loadAspirations(1);
-  }, [userId]);
+  }, [loadAspirations]);
 
   const toggleDescription = (id: any) => {
     setExpandedDescriptions(prev => ({
@@ -338,7 +348,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
 
   const renderVerifiedSection = (
     validations: Validation[],
-    parentItem: AspirationItem | Achievement,
+    _parentItem: AspirationItem | Achievement,
   ) => {
     if (!validations || validations?.length === 0) return null;
 
@@ -702,7 +712,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
 
   const renderAspirationItem = ({
     item,
-    index,
+    index: _index,
   }: {
     item: AspirationItem;
     index: number;
@@ -781,8 +791,8 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
               <TouchableOpacity
                 style={styles.statIconContainer}
                 onPress={() => {
-                  handleStatsPress(parseInt(item.id));
-                  handleLike(parseInt(item.id));
+                  handleStatsPress(item.id);
+                  handleLike(item.id);
                 }}
               >
                 <Image
@@ -797,7 +807,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
               <TouchableOpacity
                 style={styles.statCountContainer}
                 onPress={() => {
-                  handleStatsPress(parseInt(item.id));
+                  handleStatsPress(item.id);
                   setLikesModalVisible(true);
                 }}
               >
@@ -808,7 +818,7 @@ const ProfileAspirationsView: React.FC<ProfileAspirationsViewProps> = ({
             <TouchableOpacity
               style={styles.commentContainer}
               onPress={() => {
-                handleStatsPress(parseInt(item.id));
+                handleStatsPress(item.id);
                 setIsAddingComment(true); // Always show input in modal
                 setCommentsModalVisible(true);
               }}

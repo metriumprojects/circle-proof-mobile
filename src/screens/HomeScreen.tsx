@@ -1,19 +1,37 @@
-import { StyleSheet, ScrollView, Dimensions, RefreshControl, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  FlatList,
+  Dimensions,
+  RefreshControl,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  Text,
+  Platform,
+} from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../components/Header';
 import HomeFeedBox from '../components/HomeFeedBox';
 import NewsCard from '../components/NewsCard';
 import { useAuth } from '../context/AuthContext';
 import { getAllPosts } from '../api/service';
+import { mapPostToNewsCardProps } from '../util/postFormatter';
+import { getCachedPosts, setCachedPosts } from '../lib/postsCache';
 
 const { height } = Dimensions.get('window');
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
+const HOME_FEED_CACHE_KEY = 'home_feed:page1';
+
+const FeedPostItem = React.memo(({ post }: { post: any }) => {
+  const cardProps = useMemo(() => mapPostToNewsCardProps(post), [post]);
+  return <NewsCard {...cardProps} />;
+});
 
 const HomeScreen = () => {
-  const { token, user, isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,194 +43,121 @@ const HomeScreen = () => {
     hasPrev: false,
   });
   const [loadingMore, setLoadingMore] = useState(false);
+  const isFetchingMoreRef = useRef(false);
 
-  useEffect(() => {
-    if (!loading) {
-      console.log('[HomeScreen] Auth Status:', {
-        isAuthenticated,
-        token: token ? `${token.substring(0, 10)}...${token.slice(-5)}` : null, // Log partial token for security
-        user: user ? { ...user, password: user.password ? '[HIDDEN]' : undefined } : null // Hide password if present
-      });
-    }
-  }, [token, user, isAuthenticated, loading]);
-
-  const fetchPosts = async (page: number = 1) => {
-    try {
-      if (page === 1) {
-        setPostsLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      
-      const response = await getAllPosts(page);
-      console.log('[HomeScreen] Posts API Response:', response.data);
-      
-      if (response.data && response.data.data.posts) {
+  const fetchPosts = useCallback(
+    async (page: number = 1, options?: { silent?: boolean }) => {
+      try {
         if (page === 1) {
-          setPosts(response.data.data.posts);
+          if (!options?.silent) {
+            setPostsLoading(true);
+          }
         } else {
-          // Append new posts to existing posts
-          setPosts(prevPosts => [...prevPosts, ...response.data.data.posts]);
+          isFetchingMoreRef.current = true;
+          setLoadingMore(true);
         }
-        // Update pagination data
-        if (response.data.data.pagination) {
-          console.log('[HomeScreen] Pagination data:', response.data.data.pagination);
-          setPagination(response.data.data.pagination);
-        } else {
-          console.log('[HomeScreen] No pagination data in response');
-          // If no pagination data, estimate based on number of posts returned
-          // If we got 10+ posts, there might be more (assuming standard page size)
-          const defaultPageSize = 10;
-          const hasMore = response.data.data.posts.length >= defaultPageSize;
+
+        const response = await getAllPosts(page);
+        const fetchedPosts = response.data?.data?.posts;
+
+        if (Array.isArray(fetchedPosts)) {
+          let nextPagination = response.data?.data?.pagination;
+          if (!nextPagination) {
+            const defaultPageSize = 10;
+            nextPagination = {
+              currentPage: page,
+              totalPages: 0,
+              totalPosts: fetchedPosts.length,
+              hasNext: fetchedPosts.length >= defaultPageSize,
+              hasPrev: page > 1,
+            };
+          }
+
+          if (page === 1) {
+            setPosts(fetchedPosts);
+            setCachedPosts(HOME_FEED_CACHE_KEY, fetchedPosts, nextPagination);
+          } else {
+            setPosts(prevPosts => [...prevPosts, ...fetchedPosts]);
+          }
+          setPagination(nextPagination);
+        } else if (page === 1 && !options?.silent) {
+          setPosts([]);
           setPagination({
-            currentPage: page,
-            totalPages: 0, // Unknown
-            totalPosts: response.data.data.posts.length, // Current page count
-            hasNext: hasMore,
-            hasPrev: page > 1,
+            currentPage: 1,
+            totalPages: 1,
+            totalPosts: 0,
+            hasNext: false,
+            hasPrev: false,
           });
         }
-      } else {
-        if (page === 1) {
+      } catch (error) {
+        console.error('[HomeScreen] Error fetching posts:', error);
+        if (page === 1 && !options?.silent) {
           setPosts([]);
         }
-        setPagination({
-          currentPage: page,
-          totalPages: 1,
-          totalPosts: 0,
-          hasNext: false,
-          hasPrev: page > 1,
-        });
+      } finally {
+        setPostsLoading(false);
+        setLoadingMore(false);
+        isFetchingMoreRef.current = false;
       }
-    } catch (error) {
-      console.error('[HomeScreen] Error fetching posts:', error);
-      if (page === 1) {
-        setPosts([]);
-      }
-    } finally {
-      setPostsLoading(false);
-      setLoadingMore(false);
-    }
- };
+    },
+    [],
+  );
 
   useEffect(() => {
-    if (!loading && isAuthenticated) {
-      fetchPosts();
-    }
-  }, [loading, isAuthenticated]);
+    if (loading || !isAuthenticated) return;
+    let cancelled = false;
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchPosts();
-    setRefreshing(false);
-  };
-
-  const renderPost = (post: any, index: number) => {
-    console.log(post,"jj");
-    
-    // Parse comma-separated attachment URLs and separate images, videos, and PDFs
-    let imageUrls: { uri: string }[] = [];
-    let videoUrls: { uri: string }[] = [];
-    let pdfUrls: { uri: string }[] = [];
-    
-    if (post.attachmentUrl) {
-      // Split comma-separated URLs and classify as images, videos, or PDFs based on extension
-      const urls = post.attachmentUrl.split(',');
-      urls.forEach((url: string) => {
-        const trimmedUrl = url.trim();
-        const lowerCaseUrl = trimmedUrl.toLowerCase();
-        // Check if URL has video extension
-        if (lowerCaseUrl.endsWith('.mp4') || lowerCaseUrl.endsWith('.mov') || lowerCaseUrl.endsWith('.avi') || lowerCaseUrl.endsWith('.mkv') || lowerCaseUrl.endsWith('.wmv')) {
-          videoUrls.push({ uri: trimmedUrl });
-        } 
-        // Check if URL has PDF extension
-        else if (lowerCaseUrl.endsWith('.pdf')) {
-          pdfUrls.push({ uri: trimmedUrl });
-        } 
-        // Assume it's an image if not a known video or PDF format
-        else {
-          imageUrls.push({ uri: trimmedUrl });
+    const loadInitial = async () => {
+      const cached = await getCachedPosts<any[]>(HOME_FEED_CACHE_KEY);
+      if (cancelled) return;
+      if (cached && cached.posts.length > 0) {
+        setPosts(cached.posts);
+        if (cached.pagination) {
+          setPagination(cached.pagination);
         }
-      });
-    }
-    
-    
-    // Format post data to match NewsCard props - keep PDFs separate from images
-    const formattedPost = {
-      author: post.user?.fullName || 'Unknown User',
-      timeAgo: formatDateAgo(post.createdAt),
-      description: post.content || post.title || '',
-      imageUrl: imageUrls.length > 0 ? imageUrls[0] : undefined, // First image for single image display
-      imageUrls: imageUrls.length > 1 ? imageUrls : undefined, // Multiple images if more than one
-      videoUrl: videoUrls.length > 0 ? videoUrls[0] : undefined, // First video for single video display
-      videoUrls: videoUrls.length > 1 ? videoUrls : undefined, // Multiple videos if more than one
-      pdfUrl: pdfUrls.length > 0 ? pdfUrls[0] : undefined, // First PDF for single PDF display
-      pdfUrls: pdfUrls.length > 1 ? pdfUrls : undefined, // Multiple PDFs if more than one
-      achievement: post.title && !post.content ? post.title : null,
-      achievementDate: post.createdAt ? formatDate(post.createdAt) : null,
-      stats: post.stats || {},
-      recentComments: post.recentComments || [],
-      id: post.id
+        setPostsLoading(false);
+        fetchPosts(1, { silent: true });
+      } else {
+        fetchPosts(1);
+      }
     };
 
-    return (
-      <NewsCard
-        key={post.id || index}
-        author={formattedPost.author}
-        timeAgo={formattedPost.timeAgo}
-        description={formattedPost.description}
-        imageUrl={formattedPost.imageUrl}
-        imageUrls={formattedPost.imageUrls} // Pass multiple images
-        videoUrl={formattedPost.videoUrl} // Pass single video
-        videoUrls={formattedPost.videoUrls} // Pass multiple videos
-        pdfUrl={formattedPost.pdfUrl} // Pass single PDF
-        pdfUrls={formattedPost.pdfUrls} // Pass multiple PDFs
-        achievement={formattedPost.achievement}
-        achievementDate={formattedPost.achievementDate}
-        postId={post.id}
-        initialLikeStatus={post.stats?.isLiked || false}
-        initialLikeCount={post.stats?.likesCount || 0}
-        recentComments={formattedPost.recentComments}
-        title ={post.title}
-        stats ={formattedPost.stats}
-        userId ={post.user?.id}
-        profilePicture={post.user?.profilePicture}
-        isVerified={post.user?.idVerified}
-        company ={post.user?.company}
-        designation ={post.user?.designation}
-      />
-    );
-  };
+    loadInitial();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, isAuthenticated, fetchPosts]);
 
-  // Helper function to format date as time ago
-  const formatDateAgo = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchPosts(1, { silent: true });
+    setRefreshing(false);
+  }, [fetchPosts]);
 
-    if (diffInSeconds < 60) return 'Just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-    return `${Math.floor(diffInSeconds / 2592000)}mo ago`;
-  };
-
-  // Helper function to format date
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  const loadMorePosts = async () => {
-    if (pagination.hasNext && !loadingMore) {
+  const loadMorePosts = useCallback(async () => {
+    if (
+      pagination.hasNext &&
+      !loadingMore &&
+      !isFetchingMoreRef.current &&
+      !postsLoading
+    ) {
       const nextPage = pagination.currentPage + 1;
       await fetchPosts(nextPage);
     }
-  };
+  }, [pagination.hasNext, pagination.currentPage, loadingMore, postsLoading, fetchPosts]);
 
-   const LoadMoreButton = () => {
+  const renderFeedItem = useCallback(
+    ({ item }: { item: any }) => <FeedPostItem post={item} />,
+    [],
+  );
+
+  const keyExtractor = useCallback(
+    (item: any, index: number) => String(item?.id ?? item?._id ?? index),
+    [],
+  );
+
+  const renderFooter = useCallback(() => {
     if (!pagination?.hasNext) return null;
 
     return (
@@ -232,39 +177,52 @@ const HomeScreen = () => {
         </TouchableOpacity>
       </View>
     );
-  };
+  }, [pagination?.hasNext, loadingMore, loadMorePosts]);
+
+  const renderEmpty = useCallback(
+    () => (
+      <NewsCard
+        author="No Posts"
+        timeAgo=""
+        description="No posts available yet. Be the first to share!"
+      />
+    ),
+    [],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header title="Feed" showSearchBar={true} showNotification={true} />
       <HomeFeedBox />
-      <ScrollView
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {postsLoading ? (
+      {postsLoading && posts.length === 0 ? (
+        <View style={[styles.container, styles.scrollContent]}>
           <NewsCard
             author="Loading..."
             timeAgo=""
             description="Fetching posts..."
           />
-        ) : posts.length > 0 ? (
-          <>
-            {posts.map((post, index) => renderPost(post, index))}
-            <LoadMoreButton />
-          </>
-        ) : (
-          <NewsCard
-            author="No Posts"
-            timeAgo=""
-            description="No posts available yet. Be the first to share!"
-          />
-        )}
-      </ScrollView>
+        </View>
+      ) : (
+        <FlatList
+          style={styles.container}
+          data={posts}
+          keyExtractor={keyExtractor}
+          renderItem={renderFeedItem}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          onEndReached={loadMorePosts}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
+        />
+      )}
     </SafeAreaView>
   );
 };

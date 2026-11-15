@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +17,7 @@ import { fetchSpecificUserProfileStats, toggleFollow } from '../../api/service';
 
 // Define the type for profile stats
 interface ProfileStats {
-  userId: number;
+  userId: number | string;
   fullName: string;
   username: string | null;
   profilePicture: string | null;
@@ -38,8 +37,6 @@ interface ProfileStats {
   verificationsGiven: number;
 }
 
-const { width, height } = Dimensions.get('window');
-
 const ProfileView = () => {
   const [credibilityModalVisible, setCredibilityModalVisible] = useState(false);
   const [profileData, setProfileData] = useState<ProfileStats | null>(null);
@@ -47,13 +44,13 @@ const ProfileView = () => {
     useState(false);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { userId } = route.params || {};
   console.log(userId, 'errrrr');
 
   // Function to fetch specific user profile stats
-  const fetchProfileData = async () => {
+  const fetchProfileData = useCallback(async () => {
     try {
       setLoading(true);
       if (userId) {
@@ -72,11 +69,11 @@ const ProfileView = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     fetchProfileData();
-  }, [userId]);
+  }, [fetchProfileData]);
 
   // Update the isFollowing state whenever profileData changes
   useEffect(() => {
@@ -249,7 +246,21 @@ const ProfileView = () => {
                 {isFollowing ? 'Unfollow' : 'Follow'}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.contactButton}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={() => {
+                if (!userId) return;
+                navigation.navigate('ChatInterface', {
+                  userId,
+                  otherUser: {
+                    id: userId,
+                    fullName: profileData?.fullName,
+                    username: profileData?.username,
+                    profilePicture: profileData?.profilePicture,
+                  },
+                });
+              }}
+            >
               <Text style={styles.contactButtonText}>Contact</Text>
             </TouchableOpacity>
           </View>

@@ -9,8 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  NativeSyntheticEvent,
-  TextInputChangeEventData,
   Image,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
@@ -19,7 +17,6 @@ import * as Yup from 'yup';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useSignUp } from '@clerk/clerk-expo';
 import { signUp } from '../../api/service';
-import { useAuth } from '../../context/AuthContext';
 
 interface SignupFormValues {
   name: string;
@@ -32,7 +29,6 @@ const SignupScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<any>>();
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [secureConfirmTextEntry, setSecureConfirmTextEntry] = useState(true);
-  const { login } = useAuth();
   const { isLoaded: isClerkLoaded, signUp: clerkSignUp, setActive } = useSignUp();
 
   const signupSchema = Yup.object().shape({

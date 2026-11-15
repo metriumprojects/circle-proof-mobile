@@ -1,6 +1,27 @@
 // util/authController.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+type ClerkTokenProvider = () => Promise<string | null>;
+let clerkTokenProvider: ClerkTokenProvider | null = null;
+
+export const setClerkTokenProvider = (provider: ClerkTokenProvider | null) => {
+  clerkTokenProvider = provider;
+};
+
+export const getActiveToken = async (): Promise<string | null> => {
+  if (clerkTokenProvider) {
+    try {
+      const freshToken = await clerkTokenProvider();
+      if (freshToken) {
+        return freshToken;
+      }
+    } catch (error) {
+      console.warn('Error fetching fresh Clerk token:', error);
+    }
+  }
+  return getStoredToken();
+};
+
 // Store auth data in AsyncStorage for React Native
 export const storeAuthData = async (token: string, userData: any) => {
   try {
@@ -17,11 +38,7 @@ export const storeAuthData = async (token: string, userData: any) => {
 export const getStoredToken = async (): Promise<string | null> => {
   try {
     // React Native environment
-    const token = await AsyncStorage.getItem('authToken');
-     console.log("token at start",token);
-    return token;
-   
-    
+    return await AsyncStorage.getItem('authToken');
   } catch (error) {
     console.error('Error getting stored token:', error);
     return null;

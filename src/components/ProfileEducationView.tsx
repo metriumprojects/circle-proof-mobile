@@ -9,16 +9,14 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { getEducationDataById, addEducationLikesUnlike } from '../api/service';
 import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -144,14 +142,15 @@ interface ProfileEducationViewProps {
 const ProfileEducationView: React.FC<ProfileEducationViewProps> = ({
   userId,
 }) => {
-  const navigation = useNavigation<any>();
   const [educationGroups, setEducationGroups] = useState<EducationGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [currentItemType, setCurrentItemType] = useState<
     'education' | 'achievement' | null
   >(null);
@@ -181,19 +180,26 @@ const ProfileEducationView: React.FC<ProfileEducationViewProps> = ({
     }
   };
 
-  const handleStatsPress = (id: number, type: 'education' | 'achievement') => {
+  const handleStatsPress = (
+    id: number | string,
+    type: 'education' | 'achievement',
+  ) => {
     setCurrentItemId(id);
     setCurrentItemType(type);
   };
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'education') => {
+    (
+      itemId: number | string,
+      increment: number,
+      type: string = 'education',
+    ) => {
       setEducationGroups(prevGroups => {
         return prevGroups.map(group => ({
           ...group,
           educationEntries: group.educationEntries.map(entry => {
-            if (type === 'education' && entry.id === itemId) {
+            if (type === 'education' && String(entry.id) === String(itemId)) {
               return {
                 ...entry,
                 stats: {
@@ -212,7 +218,7 @@ const ProfileEducationView: React.FC<ProfileEducationViewProps> = ({
             ) {
               const updatedAchievements = entry.achievements.map(
                 achievement => {
-                  if (Number(achievement.id) === Number(itemId)) {
+                  if (String(achievement.id) === String(itemId)) {
                     return {
                       ...achievement,
                       stats: {
@@ -230,7 +236,7 @@ const ProfileEducationView: React.FC<ProfileEducationViewProps> = ({
 
               // Check if any achievement was actually updated
               const isAchievementUpdated = entry.achievements.some(
-                ach => Number(ach.id) === Number(itemId),
+                ach => String(ach.id) === String(itemId),
               );
 
               if (isAchievementUpdated) {
@@ -248,44 +254,48 @@ const ProfileEducationView: React.FC<ProfileEducationViewProps> = ({
     [],
   );
 
-  const fetchEducation = async (page: number = 1) => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      if (page === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      const response = await getEducationDataById(userId);
-      if (response.data && response.data.data && response.data.data.education) {
-        if (page === 1) {
-          setEducationGroups(response.data.data.education);
-        } else {
-          setEducationGroups(prev => [
-            ...prev,
-            ...response.data.data.education,
-          ]);
-        }
-
-        // Update pagination if available in response
-        if (response.data.data.pagination) {
-          setPagination(response.data.data.pagination);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching education data:', error);
-    } finally {
-      if (loadingMore) {
-        setLoadingMore(false);
-      } else {
+  const fetchEducation = useCallback(
+    async (page: number = 1) => {
+      if (!userId) {
         setLoading(false);
+        return;
       }
-    }
-  };
+      try {
+        if (page === 1) {
+          setLoading(true);
+        } else {
+          setLoadingMore(true);
+        }
+
+        const response = await getEducationDataById(userId);
+        if (
+          response.data &&
+          response.data.data &&
+          response.data.data.education
+        ) {
+          if (page === 1) {
+            setEducationGroups(response.data.data.education);
+          } else {
+            setEducationGroups(prev => [
+              ...prev,
+              ...response.data.data.education,
+            ]);
+          }
+
+          // Update pagination if available in response
+          if (response.data.data.pagination) {
+            setPagination(response.data.data.pagination);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching education data:', error);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [userId],
+  );
 
   const loadMoreEducation = async () => {
     if (pagination.hasNext && !loadingMore) {
@@ -296,7 +306,7 @@ const ProfileEducationView: React.FC<ProfileEducationViewProps> = ({
 
   useEffect(() => {
     fetchEducation();
-  }, [userId]);
+  }, [fetchEducation]);
 
   const handleLike = async (id: number, type: string) => {
     try {

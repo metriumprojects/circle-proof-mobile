@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,22 +9,18 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useState, useEffect } from 'react';
 import {
   fetchSkillsByUserId,
   addSkillLikeUnlike,
-  addEducationLikesUnlike,
   toggleLikeSectionAchievement,
 } from '../api/service';
 import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -122,14 +118,15 @@ interface ProfileSkillsViewProps {
 }
 
 const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
-  const navigation = useNavigation<any>();
   const [skillsData, setSkillsData] = useState<SkillItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [expandedDescriptions, setExpandedDescriptions] = useState<{
     [key: number]: boolean;
   }>({});
@@ -178,10 +175,10 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'skill') => {
+    (itemId: number | string, increment: number, type: string = 'skill') => {
       setSkillsData(prevSkills => {
         return prevSkills.map(skill => {
-          if (type === 'skill' && Number(skill.id) === Number(itemId)) {
+          if (type === 'skill' && String(skill.id) === String(itemId)) {
             return {
               ...skill,
               stats: {
@@ -199,7 +196,7 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
             skill.achievements.length > 0
           ) {
             const updatedAchievements = skill.achievements.map(ach => {
-              if (Number(ach.id) === Number(itemId)) {
+              if (String(ach.id) === String(itemId)) {
                 return {
                   ...ach,
                   stats: {
@@ -215,7 +212,7 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
 
             // Check if any achievement was actually updated
             const isAchievementUpdated = skill.achievements.some(
-              ach => Number(ach.id) === Number(itemId),
+              ach => String(ach.id) === String(itemId),
             );
 
             if (isAchievementUpdated) {
@@ -229,35 +226,38 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
     [],
   );
 
-  const loadSkills = async (page: number = 1) => {
-    if (!userId) return;
-    try {
-      if (page === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      const response = await fetchSkillsByUserId(userId, page);
-      if (response.data.success) {
+  const loadSkills = useCallback(
+    async (page: number = 1) => {
+      if (!userId) return;
+      try {
         if (page === 1) {
-          setSkillsData(response.data.data.skills);
+          setLoading(true);
         } else {
-          setSkillsData(prev => [...prev, ...response.data.data.skills]);
+          setLoadingMore(true);
         }
-        setPagination(response.data.data.pagination);
-        setCurrentPage(page);
+        const response = await fetchSkillsByUserId(userId, page);
+        if (response.data.success) {
+          if (page === 1) {
+            setSkillsData(response.data.data.skills);
+          } else {
+            setSkillsData(prev => [...prev, ...response.data.data.skills]);
+          }
+          setPagination(response.data.data.pagination);
+          setCurrentPage(page);
+        }
+      } catch (error) {
+        console.error('Error fetching skills:', error);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-    } catch (error) {
-      console.error('Error fetching skills:', error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
+    },
+    [userId],
+  );
 
   useEffect(() => {
     loadSkills(1);
-  }, [userId]);
+  }, [loadSkills]);
 
   const handleLike = async (id: number, type: string = 'skill') => {
     try {
@@ -313,7 +313,7 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
   };
 
   const handleStatsPress = (
-    id: number,
+    id: number | string,
     type: 'skill' | 'achievement' = 'skill',
   ) => {
     setCurrentItemId(id);
@@ -354,7 +354,7 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
 
   const renderVerifiedSection = (
     validations: Validation[],
-    parentItem: SkillItem | Achievement,
+    _parentItem: SkillItem | Achievement,
   ) => {
     if (!validations || validations.length === 0) return null;
 
@@ -641,7 +641,7 @@ const ProfileSkillsView = ({ userId }: ProfileSkillsViewProps) => {
 
   const renderSkillItem = ({
     item,
-    index,
+    index: _index,
   }: {
     item: SkillItem;
     index: number;

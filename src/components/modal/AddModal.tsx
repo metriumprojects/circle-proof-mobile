@@ -45,7 +45,7 @@ const AddModal: React.FC<AddModalProps> = ({
   placeholder = 'Please select',
   options = [],
   onSelect,
-  onNext,
+  onNext: _onNext,
   searchable = true,
   multiple = false,
   showNextButton = true,

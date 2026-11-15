@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,8 +13,6 @@ import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import Toast from 'react-native-toast-message';
 import { addPosition, getCompanies } from '../../api/service';
-
-const { width, height } = Dimensions.get('window');
 
 const AddPositionScreen = () => {
   const navigation = useNavigation<any>();
@@ -48,7 +45,7 @@ const AddPositionScreen = () => {
   // State for company suggestions
   const [showCompanySuggestions, setShowCompanySuggestions] = useState(false);
   const [companySuggestions, setCompanySuggestions] = useState<any[]>([]);
-  const [loadingCompanies, setLoadingCompanies] = useState<boolean>(false);
+  const [, setLoadingCompanies] = useState<boolean>(false);
 
   const [showEmploymentDropdown, setShowEmploymentDropdown] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);

@@ -19,7 +19,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSignIn } from '@clerk/clerk-expo';
 import { signIn } from '../../api/service';
 import { useAuth } from '../../context/AuthContext';
-import { getStoredToken } from '../../util/authController';
 import ForgotPasswordModal from '../../components/modal/ForgotPasswordModal';
 
 interface LoginFormValues {

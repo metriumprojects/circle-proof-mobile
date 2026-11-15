@@ -9,8 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  NativeSyntheticEvent,
-  TextInputChangeEventData,
 } from 'react-native';
 import { Formik, FormikHelpers } from 'formik';
 import * as Yup from 'yup';

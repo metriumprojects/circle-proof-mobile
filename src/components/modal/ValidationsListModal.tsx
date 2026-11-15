@@ -33,7 +33,7 @@ interface Skill {
 }
 
 interface Company {
-  id: number;
+  id: number | string;
   name: string;
   logo: string;
   uniqueAddress: string;
@@ -41,7 +41,7 @@ interface Company {
 }
 
 interface Validator {
-  id: number;
+  id: number | string;
   fullName: string;
   profilePicture: string | null;
   currentDesignation: string | null;
@@ -49,16 +49,16 @@ interface Validator {
 }
 
 interface Validation {
-  id: number;
+  id: number | string;
   validator: Validator;
   validatorReference?: {
     type: string;
-    id: number;
+    id: number | string;
     title: string;
     isVerified: boolean;
     hrVerified: boolean;
     company: {
-      id: number;
+      id: number | string;
       name: string;
       logo: string;
     };
@@ -108,13 +108,15 @@ const ValidationsListModal: React.FC<ValidationsListModalProps> = ({
   readOnly = false, // Default to false
 }) => {
   const [data, setData] = useState<Validation[]>([]);
-  const [hiddenIds, setHiddenIds] = useState<number[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<(number | string)[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
 
-  const [isVisibilityChanging, setIsVisibilityChanging] = useState<number | null>(null);
-  const [visibilityError, setVisibilityError] = useState<string | null>(null);
+  const [isVisibilityChanging, setIsVisibilityChanging] = useState<
+    number | string | null
+  >(null);
+  const [, setVisibilityError] = useState<string | null>(null);
 
   useEffect(() => {
     if (item?.validations) {
@@ -129,7 +131,7 @@ const ValidationsListModal: React.FC<ValidationsListModalProps> = ({
 
   const reorderPayload = () => {
     const payload = data.map((validation, index) => ({
-      validationId: Number(validation.id),
+      validationId: validation.id,
       order: Number(index + 1),
     }));
     return payload;
@@ -139,7 +141,7 @@ const ValidationsListModal: React.FC<ValidationsListModalProps> = ({
     try {
       setLoading(true);
       const payload = reorderPayload();
-      const response = await reorderValidations(payload);
+      await reorderValidations(payload);
       Toast.show({
         type: 'success',
         text1: 'Success',
@@ -166,7 +168,7 @@ const ValidationsListModal: React.FC<ValidationsListModalProps> = ({
   const renderValidationItem = ({
     item,
     drag,
-    isActive,
+    isActive: _isActive,
   }: RenderItemParams<Validation>) => {
     const validation = item;
     const validator = validation.validator;
@@ -174,11 +176,11 @@ const ValidationsListModal: React.FC<ValidationsListModalProps> = ({
     const isHidden = hiddenIds.includes(validation.id);
 
 
-    const toggleValidationVisibility = async (id: number) => {
+    const toggleValidationVisibility = async (id: number | string) => {
       try {
         setIsVisibilityChanging(id);
         const payload = { isHidden: !isHidden };
-        const response = await toggleValidation(id, payload);
+        await toggleValidation(id as any, payload);
         setHiddenIds(prev =>
           prev.includes(id)
             ? prev.filter(hiddenId => hiddenId !== id)
@@ -405,9 +407,8 @@ const ValidationsListModal: React.FC<ValidationsListModalProps> = ({
   };
 
   const ListHeader = () => {
-    // Determine logo and name (Company or School)
+    // Determine logo (Company or School)
     const entityLogo = item.company?.logo || item.school?.logo;
-    const entityName = item.company?.name || item.school?.name;
 
     return (
       <>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import {
 import { useNotification } from '../../context/NotificationContext';
 
 interface Actor {
-  id: number;
+  id: number | string;
   fullName: string;
   profilePicture: string | null;
   username: string | null;
@@ -34,12 +34,12 @@ interface Metadata {
 }
 
 interface NotificationItem {
-  id: number;
-  userId: number;
-  actorId: number;
+  id: number | string;
+  userId: number | string;
+  actorId: number | string;
   type: string;
   entityType: string;
-  entityId: number;
+  entityId: number | string;
   title: string;
   message: string;
   isRead: boolean;
@@ -50,26 +50,8 @@ interface NotificationItem {
   actor: Actor;
 }
 
-interface ApiResponse {
-  code: number;
-  success: boolean;
-  message: string;
-  data: {
-    notifications: NotificationItem[];
-    pagination: {
-      currentPage: number;
-      totalPages: number;
-      totalItems: number;
-      hasNext: boolean;
-      hasPrev: boolean;
-    };
-    unreadCount: number;
-  };
-  error: any;
-}
-
 const NotificationScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,7 +60,7 @@ const NotificationScreen = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedNotificationId, setSelectedNotificationId] = useState<
-    number | null
+    number | string | null
   >(null);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
@@ -116,7 +98,7 @@ const NotificationScreen = () => {
     }
   };
 
-  const fetchNotificationData = async (
+  const fetchNotificationData = useCallback(async (
     pageNum: number = 1,
     isRefresh: boolean = false,
   ) => {
@@ -145,11 +127,11 @@ const NotificationScreen = () => {
       }
       setLoadingMore(false);
     }
-  };
+  }, [setUnreadCount]);
 
   useEffect(() => {
     fetchNotificationData(1);
-  }, []);
+  }, [fetchNotificationData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -170,13 +152,13 @@ const NotificationScreen = () => {
     navigation.goBack();
   };
 
-  const markNotificationAsReadHandler = async (id: number) => {
+  const markNotificationAsReadHandler = async (id: number | string) => {
     try {
       const response = await markNotificationAsRead(id);
       if (response.data.success) {
         setNotifications(prev =>
           prev.map(notification =>
-            notification.id === id
+            String(notification.id) === String(id)
               ? { ...notification, isRead: true }
               : notification,
           ),
@@ -211,11 +193,54 @@ const NotificationScreen = () => {
     }
   };
 
-  const showMenu = (id: number, event: any) => {
+  const showMenu = (id: number | string, event: any) => {
     const { pageX, pageY } = event.nativeEvent;
     setMenuPosition({ x: pageX, y: pageY });
     setSelectedNotificationId(id);
     setMenuVisible(true);
+  };
+
+  const handleNotificationPress = async (item: NotificationItem) => {
+    if (!item.isRead) {
+      setNotifications(prev =>
+        prev.map(n =>
+          String(n.id) === String(item.id) ? { ...n, isRead: true } : n,
+        ),
+      );
+      setUnreadCount((prevUnreadCount: number) =>
+        Math.max(0, prevUnreadCount - 1),
+      );
+      markNotificationAsRead(item.id).catch(err =>
+        console.warn('Failed to mark notification read:', err?.message),
+      );
+    }
+
+    const type = (item.type || '').toLowerCase();
+    const entityType = (item.entityType || '').toLowerCase();
+
+    if (
+      type === 'verification_request' ||
+      type === 'validation_request'
+    ) {
+      navigation.navigate('VerificationRequest');
+    } else if (
+      type === 'verification_confirmed' ||
+      type === 'validation_confirmed' ||
+      type === 'verification_rejected' ||
+      type === 'validation_declined' ||
+      type === 'official_verification'
+    ) {
+      navigation.navigate('VerificationRequest', { initialTab: 'sent' });
+    } else if (
+      (type === 'follow' || type === 'new_follower' || entityType === 'user') &&
+      item.actor?.id
+    ) {
+      navigation.navigate('ProfileView', { userId: item.actor.id });
+    } else if (item.actor?.id && (type === 'post_like' || type === 'post_comment' || entityType === 'post')) {
+      navigation.navigate('Home');
+    } else {
+      navigation.navigate('VerificationRequest');
+    }
   };
 
   const NotificationItemComponent = ({ item }: { item: NotificationItem }) => (
@@ -224,12 +249,13 @@ const NotificationScreen = () => {
         styles.notificationItem,
         !item.isRead && styles.unreadNotification,
       ]}
-      // activeOpacity={0.7}
+      activeOpacity={0.7}
+      onPress={() => handleNotificationPress(item)}
     >
       <View style={styles.notificationContent}>
         {/* User image with unread indicator */}
         <View style={styles.userImageWrapper}>
-          {item.actor.profilePicture ? (
+          {item.actor?.profilePicture ? (
             <Image
               source={{ uri: item.actor.profilePicture }}
               style={styles.userImage}
@@ -237,7 +263,7 @@ const NotificationScreen = () => {
           ) : (
             <View style={styles.defaultUserImage}>
               <Text style={styles.defaultUserInitial}>
-                {item.actor.fullName.charAt(0).toUpperCase()}
+                {(item.actor?.fullName || 'U').charAt(0).toUpperCase()}
               </Text>
             </View>
           )}

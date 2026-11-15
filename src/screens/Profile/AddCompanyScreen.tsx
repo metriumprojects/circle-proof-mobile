@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -16,8 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { addCompany, checkCompanyName } from '../../api/service';
-
-const { width, height } = Dimensions.get('window');
 
 const AddCompanyScreen = () => {
  const navigation = useNavigation<any>();
@@ -154,6 +151,9 @@ const AddCompanyScreen = () => {
       }
 
       const response = await addCompany(formDataToSend);
+      if (response?.data?.success === false) {
+        throw new Error(response.data.message || 'Failed to create company');
+      }
 
       Alert.alert('Success', 'Company created successfully!', [
         {

@@ -10,7 +10,6 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { updateProfile, fetchProfile } from '../../api/service';
 import Toast from 'react-native-toast-message';

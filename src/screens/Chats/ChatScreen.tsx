@@ -1,597 +1,490 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   FlatList,
-  TouchableOpacity,
-  TextInput,
-  SafeAreaView,
   Image,
-  KeyboardAvoidingView,
-  Platform,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
+import {
+  ChatMessage,
+  ChatThread,
+  ChatUser,
+  deleteChatThread,
+  fetchChatThreads,
+  fetchProfile,
+  fetchUserSuggestions,
+  pinChatThread,
+  searchUsers,
+  spamChatThread,
+} from '../../api/service';
+import { getChatSocket } from '../../lib/chatSocket';
+import ChatInterface from './ChatInterface';
 
-// Define TypeScript interfaces
-interface User {
-  id: string;
-  name: string;
-  avatar: string;
-  isOnline: boolean;
+interface ContactOption {
+  id: string | number;
+  fullName?: string;
+  username?: string | null;
+  email?: string;
+  profilePicture?: string | null;
+  bio?: string | null;
 }
 
-interface Message {
-  id: string;
-  senderId: string;
-  senderName: string;
-  message: string;
-  time: string;
-  timestamp: Date;
-  isCurrentUser: boolean;
-}
-
-interface ChatMessageProps {
-  item: Message;
-  index: number;
-}
-
-interface ChatInterfaceProps {
-  userId: string;
-  onBack: () => void;
-}
-
-  // Mock data for different users and their chat messages
-const mockUsers: Record<string, User> = {
-  '1': {
-    id: '1',
-    name: 'Emery Lipshutz',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face',
-    isOnline: true,
-  },
-  '2': {
-    id: '2',
-    name: 'Paul Matusin',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-    isOnline: false,
-  },
-  '3': {
-    id: '3',
-    name: 'Sarah Johnson',
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b5c99cf5?w=40&h=40&fit=crop&crop=face',
-    isOnline: true,
-  },
-  '4': {
-    id: '4',
-    name: 'Paul Mood',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face',
-    isOnline: true,
-  },
+const formatThreadTimestamp = (dateInput?: string) => {
+  if (!dateInput) {
+    return '';
+  }
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// Mock data for current user
-const currentUser = {
-  id: 'current',
-  name: 'You',
-  avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face', // Default avatar for current user
-};
+const ChatScreen: React.FC = () => {
+  const [currentView, setCurrentView] = useState<'messages' | 'newMessage' | 'chat'>(
+    'messages',
+  );
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [loadingThreads, setLoadingThreads] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-const mockChatMessages: Record<string, Message[]> = {
-  '1': [
-    {
-      id: '1',
-      senderId: '3',
-      senderName: 'Paul Gimes',
-      message: 'Hi I\'m interested in a lesson with you. But I have a few questions',
-      time: '11:55 PM',
-      timestamp: new Date('2024-05-29T23:55:00'),
-      isCurrentUser: false,
-    },
-    {
-      id: '2',
-      senderId: 'current',
-      senderName: 'You',
-      message: 'Hi nice to meet you.',
-      time: '11:56 PM',
-      timestamp: new Date('2024-05-29T23:56:00'),
-      isCurrentUser: true,
-    },
-    {
-      id: '3',
-      senderId: '3',
-      senderName: 'Paul Gimes',
-      message: 'I would like to know if we could focus the session on youtube seo?',
-      time: '01:00 AM',
-      timestamp: new Date('2024-05-30T01:00:00'),
-      isCurrentUser: false,
-    },
-  ],
-  '2': [
-    {
-      id: '1',
-      senderId: '2',
-      senderName: 'Paul Matusin',
-      message: 'Hey! How are you doing?',
-      time: '10:30 AM',
-      timestamp: new Date('2024-05-29T10:30:00'),
-      isCurrentUser: false,
-    },
-    {
-      id: '2',
-      senderId: 'current',
-      senderName: 'You',
-      message: 'I\'m good! Thanks for asking. How about you?',
-      time: '10:35 AM',
-      timestamp: new Date('2024-05-29T10:35:00'),
-      isCurrentUser: true,
-    },
-  ],
-  '3': [
-    {
-      id: '1',
-      senderId: '3',
-      senderName: 'Sarah Johnson',
-      message: 'Can we schedule a meeting for tomorrow?',
-      time: '2:15 PM',
-      timestamp: new Date('2024-05-29T14:15:00'),
-      isCurrentUser: false,
-    },
-  ],
-  '4': [
-    {
-      id: '1',
-      senderId: '4',
-      senderName: 'Paul Mood',
-      message: 'Looking forward to our collaboration!',
-      time: '3:45 PM',
-      timestamp: new Date('2024-05-29T15:45:00'),
-      isCurrentUser: false,
-    },
-  ],
-};
+  const [selectedThread, setSelectedThread] = useState<{
+    threadId?: string | number;
+    userId?: string | number;
+    otherUser?: ChatUser | null;
+    isPinned?: boolean;
+  } | null>(null);
 
-// Mock messages for the main messages list
-const mockMessages = [
-  {
-    id: '1',
-    userId: '1', // Link to mockUsers
-    name: 'Emery Lipshutz',
-    message: 'Hi thanks for getting back to me. I just wanted to d...',
-    time: '11:55 PM',
-    unreadCount: 2,
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face',
-  },
-  {
-    id: '2',
-    userId: '2', // Link to mockUsers
-    name: 'Paul Matusin',
-    message: 'Hey! How are you doing?',
-    time: '10:35 AM',
-    unreadCount: 0,
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-  },
-  {
-    id: '3',
-    userId: '3', // Link to mockUsers
-    name: 'Sarah Johnson',
-    message: 'Can we schedule a meeting for tomorrow?',
-    time: '2:15 PM',
-    unreadCount: 1,
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b5c99cf5?w=40&h=40&fit=crop&crop=face',
-  },
-  {
-    id: '4',
-    userId: '4', // Link to mockUsers
-    name: 'Paul Mood',
-    message: 'Looking forward to our collaboration!',
-    time: '3:45 PM',
-    unreadCount: 0,
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face',
-  },
-];
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'pinned'>(
+    'all',
+  );
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-const mockContacts = [
-  {
-    id: '1',
-    userId: '1',
-    name: 'Emery Lipshutz',
-    title: 'UI/UX Designer',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face',
-  },
-  {
-    id: '2',
-    userId: '2',
-    name: 'Paul Matusin',
-    title: 'Head of sales at Google',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-  },
-  {
-    id: '3',
-    userId: '4',
-    name: 'Paul Mood',
-    title: 'Head of sales at Google',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face',
-  },
-  {
-    id: '4',
-    userId: '3',
-    name: 'Sarah Johnson',
-    title: 'Product Manager',
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b5c99cf5?w=40&h=40&fit=crop&crop=face',
-  },
-];
-
-// Chat Interface Component
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ userId, onBack }) => {
-  const [messageInput, setMessageInput] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [showChatTooltip, setShowChatTooltip] = useState<boolean>(false);
+  const [contactSearch, setContactSearch] = useState('');
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedThreadIdRef = useRef<string | number | undefined>(undefined);
+  const hasLoadedThreadsRef = useRef(false);
 
   useEffect(() => {
-    // Load user data and messages for the specific userId
-    if (userId && mockUsers[userId]) {
-      setUser(mockUsers[userId]);
-      setMessages(mockChatMessages[userId] || []);
+    selectedThreadIdRef.current = selectedThread?.threadId;
+  }, [selectedThread]);
+
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const res = await fetchProfile();
+      const profile = res?.data?.data?.user || res?.data?.data || res?.data;
+      const resolvedId = profile?.id ?? profile?._id ?? profile?.userId;
+      if (resolvedId != null) {
+        setCurrentUserId(String(resolvedId));
+      }
+    } catch {
+      // Ignore if unauthenticated yet
     }
-  }, [userId]);
+  }, []);
 
-  const sendMessage = () => {
-    if (messageInput.trim()) {
-      const newMessage = {
-        id: Date.now().toString(),
-        senderId: 'current',
-        senderName: 'You',
-        message: messageInput.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date(),
-        isCurrentUser: true,
-      };
-
-      setMessages(prevMessages => [...prevMessages, newMessage]);
-      setMessageInput('');
+  const loadThreads = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoadingThreads(true);
     }
-  };
-
-  const handleChatTooltipAction = (action) => {
-    console.log(`Chat ${action} action for user ${userId}`);
-    // Add your logic here for each action
-    switch (action) {
-      case 'mute':
-        // Handle mute conversation logic
-        break;
-      case 'block':
-        // Handle block user logic
-        break;
-      case 'report':
-        // Handle report user logic
-        break;
-      case 'clear':
-        // Handle clear chat history logic
-        break;
-      default:
-        break;
+    try {
+      const res = await fetchChatThreads();
+      const list: ChatThread[] = res?.data?.data || [];
+      setThreads(list);
+      hasLoadedThreadsRef.current = true;
+    } catch (err: any) {
+      if (!opts?.silent) {
+        Toast.show({
+          type: 'error',
+          text1: 'Failed to load chats',
+          text2: err?.response?.data?.message || 'Please try again.',
+        });
+      }
+    } finally {
+      setLoadingThreads(false);
+      setRefreshing(false);
     }
-    setShowChatTooltip(false);
-  };
+  }, []);
 
-  const formatDate = (date) => {
-    const today = new Date();
-    const messageDate = new Date(date);
+  const handleThreadUpdated = useCallback(() => {
+    loadThreads({ silent: true });
+  }, [loadThreads]);
 
-    if (messageDate.toDateString() === today.toDateString()) {
-      return 'Today';
+  useEffect(() => {
+    loadCurrentUser();
+  }, [loadCurrentUser]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadThreads({ silent: hasLoadedThreadsRef.current });
+    }, [loadThreads]),
+  );
+
+  // Live thread preview + unread count updates via Socket.IO
+  useEffect(() => {
+    let isMounted = true;
+    let activeSocket: any = null;
+
+    const handleIncomingMessage = (msg: ChatMessage) => {
+      if (!isMounted || !msg) {
+        return;
+      }
+      let matched = false;
+      setThreads(prev =>
+        prev.map(thread => {
+          if (String(thread.id) !== String(msg.conversationId)) {
+            return thread;
+          }
+          matched = true;
+          const isOwn = currentUserId
+            ? String(msg.senderId) === currentUserId
+            : Boolean(
+                thread.otherUserId != null &&
+                  String(msg.senderId) !== String(thread.otherUserId),
+              );
+          const isOpen =
+            selectedThreadIdRef.current != null &&
+            String(selectedThreadIdRef.current) === String(msg.conversationId);
+          return {
+            ...thread,
+            lastMessage: {
+              id: msg.id,
+              body: msg.body,
+              createdAt: msg.createdAt,
+              senderId: msg.senderId,
+              sender: msg.sender,
+            },
+            lastMessageAt: msg.createdAt,
+            unreadCount:
+              isOpen || isOwn
+                ? thread.unreadCount || 0
+                : (thread.unreadCount || 0) + 1,
+          };
+        }),
+      );
+      if (!matched) {
+        loadThreads({ silent: true });
+      }
+    };
+
+    getChatSocket()
+      .then(socket => {
+        if (!isMounted) {
+          return;
+        }
+        activeSocket = socket;
+        socket.on('message:new', handleIncomingMessage);
+      })
+      .catch(err => {
+        console.warn('[ChatScreen] Socket listener setup warning:', err);
+      });
+
+    return () => {
+      isMounted = false;
+      if (activeSocket) {
+        activeSocket.off('message:new', handleIncomingMessage);
+      }
+    };
+  }, [currentUserId, loadThreads]);
+
+  // Fetch initial suggestions when entering New Message view
+  const loadSuggestedContacts = useCallback(async () => {
+    setLoadingContacts(true);
+    try {
+      const res = await fetchUserSuggestions(20);
+      const list: ContactOption[] = res?.data?.data?.suggestions || [];
+      setContacts(
+        list.filter(u => !currentUserId || String(u.id) !== currentUserId),
+      );
+    } catch {
+      setContacts([]);
+    } finally {
+      setLoadingContacts(false);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (currentView !== 'newMessage') {
+      return;
     }
 
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (messageDate.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
     }
 
-    return messageDate.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+    const trimmed = contactSearch.trim();
+    if (!trimmed) {
+      loadSuggestedContacts();
+      return;
+    }
 
-  const ChatMessage = ({ item, index }: ChatMessageProps) => {
-    const showDateSeparator = index === 0 ||
-      new Date(messages[index - 1].timestamp).toDateString() !==
-      new Date(item.timestamp).toDateString();
+    setLoadingContacts(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await searchUsers(trimmed);
+        const foundUsers: ContactOption[] = res?.data?.data?.users || [];
+        setContacts(
+          foundUsers.filter(u => !currentUserId || String(u.id) !== currentUserId),
+        );
+      } catch {
+        setContacts([]);
+      } finally {
+        setLoadingContacts(false);
+      }
+    }, 300);
 
-    return (
-      <View>
-        {showDateSeparator && (
-          <View style={styles.dateHeader}>
-            <Text style={styles.dateText}>
-              {formatDate(item.timestamp)}
-            </Text>
-          </View>
-        )}
-        <View style={[
-          styles.chatMessageContainer,
-          item.isCurrentUser ? styles.currentUserMessage : styles.otherUserMessage
-        ]}>
-          {!item.isCurrentUser && (
-            <View style={styles.senderInfo}>
-              <View style={styles.senderAvatar}>
-                <Text style={styles.senderInitial}>
-                  {item.senderName.charAt(0)}
-                </Text>
-              </View>
-              <View style={styles.messageWrapper}>
-                {/* <Text style={styles.senderName}>{item.senderName}</Text> */}
-                <View style={styles.chatBubble}>
-                  <Text style={styles.chatMessageText}>{item.message}</Text>
-                  <Text style={styles.senderMessageTime}>{item.time}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-          {item.isCurrentUser && (
-            <View style={styles.currentUserMessageWrapper}>
-              <View style={styles.currentUserWithAvatar}>
-                <View style={[styles.chatBubble, styles.currentUserBubble]}>
-                  <Text style={[styles.chatMessageText, styles.currentUserText]}>
-                    {item.message}
-                  </Text>
-                  <Text style={styles.currentUserMessageTime}>{item.time}</Text>
-                </View>
-                <Image source={{ uri: currentUser.avatar }} style={styles.currentUserAvatarImage} />
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, [contactSearch, currentView, currentUserId, loadSuggestedContacts]);
+
+  const filteredThreads = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return [...threads]
+      .filter(thread => {
+        if (activeFilter === 'unread' && !(thread.unreadCount && thread.unreadCount > 0)) {
+          return false;
+        }
+        if (activeFilter === 'pinned' && !thread.isPinned) {
+          return false;
+        }
+        if (!q) {
+          return true;
+        }
+        const name = (
+          thread.otherUser?.fullName ||
+          thread.otherUser?.username ||
+          ''
+        ).toLowerCase();
+        const preview = (thread.lastMessage?.body || '').toLowerCase();
+        return name.includes(q) || preview.includes(q);
+      })
+      .sort((a, b) => {
+        if (Boolean(a.isPinned) !== Boolean(b.isPinned)) {
+          return a.isPinned ? -1 : 1;
+        }
+        const timeA = new Date(
+          a.lastMessage?.createdAt || a.lastMessageAt || 0,
+        ).getTime();
+        const timeB = new Date(
+          b.lastMessage?.createdAt || b.lastMessageAt || 0,
+        ).getTime();
+        return timeB - timeA;
+      });
+  }, [threads, searchTerm, activeFilter]);
+
+  const openThread = (thread: ChatThread) => {
+    setActiveTooltip(null);
+    setThreads(prev =>
+      prev.map(t =>
+        String(t.id) === String(thread.id) ? { ...t, unreadCount: 0 } : t,
+      ),
     );
+    setSelectedThread({
+      threadId: thread.id,
+      userId: thread.otherUserId ?? thread.otherUser?.id,
+      otherUser: thread.otherUser ?? null,
+      isPinned: Boolean(thread.isPinned),
+    });
+    setCurrentView('chat');
   };
 
-  if (!user) {
+  const startConversationWithContact = (contact: ContactOption) => {
+    const existing = threads.find(
+      t =>
+        t.otherUserId != null &&
+        String(t.otherUserId) === String(contact.id),
+    );
+    setSelectedThread({
+      threadId: existing?.id,
+      userId: contact.id,
+      otherUser: {
+        id: contact.id,
+        fullName: contact.fullName,
+        username: contact.username ?? undefined,
+        email: contact.email,
+        profilePicture: contact.profilePicture,
+      },
+      isPinned: Boolean(existing?.isPinned),
+    });
+    setCurrentView('chat');
+  };
+
+  const handleTooltipAction = async (
+    action: 'delete' | 'spam' | 'pin',
+    thread: ChatThread,
+  ) => {
+    setActiveTooltip(null);
+    try {
+      if (action === 'delete') {
+        await deleteChatThread(thread.id);
+        setThreads(prev => prev.filter(t => String(t.id) !== String(thread.id)));
+        Toast.show({ type: 'success', text1: 'Conversation deleted' });
+      } else if (action === 'spam') {
+        await spamChatThread(thread.id);
+        setThreads(prev => prev.filter(t => String(t.id) !== String(thread.id)));
+        Toast.show({ type: 'success', text1: 'Marked as spam' });
+      } else if (action === 'pin') {
+        const nextPinned = !thread.isPinned;
+        await pinChatThread(thread.id, nextPinned);
+        setThreads(prev =>
+          prev.map(t =>
+            String(t.id) === String(thread.id)
+              ? { ...t, isPinned: nextPinned }
+              : t,
+          ),
+        );
+        Toast.show({
+          type: 'success',
+          text1: nextPinned ? 'Pinned to top' : 'Unpinned conversation',
+        });
+      }
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Action failed',
+        text2: err?.response?.data?.message || 'Please try again.',
+      });
+    }
+  };
+
+  const handleBackFromSubView = () => {
+    setSelectedThread(null);
+    setCurrentView('messages');
+    loadThreads({ silent: true });
+  };
+
+  if (currentView === 'chat' && selectedThread) {
+    return (
+      <ChatInterface
+        threadId={selectedThread.threadId}
+        userId={selectedThread.userId}
+        otherUser={selectedThread.otherUser}
+        initialPinned={selectedThread.isPinned}
+        onBack={handleBackFromSubView}
+        onThreadUpdated={handleThreadUpdated}
+      />
+    );
+  }
+
+  if (currentView === 'newMessage') {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>User not found</Text>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              setContactSearch('');
+              setCurrentView('messages');
+            }}
+          >
+            <Image
+              source={require('../../assets/icons/back.png')}
+              style={styles.backIcon}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>New Message</Text>
+        </View>
+
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search people by name or username..."
+            placeholderTextColor="#666"
+            value={contactSearch}
+            onChangeText={setContactSearch}
+            autoCapitalize="none"
+          />
+          {contactSearch.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={() => setContactSearch('')}
+            >
+              <Text style={styles.clearButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {loadingContacts ? (
+          <View style={styles.centerState}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.stateText}>Finding people...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={contacts}
+            keyExtractor={item => String(item.id)}
+            style={styles.contactsList}
+            renderItem={({ item }) => {
+              const displayName =
+                item.fullName || item.username || item.email || 'User';
+              const initial = displayName.charAt(0).toUpperCase();
+              return (
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  onPress={() => startConversationWithContact(item)}
+                >
+                  {item.profilePicture ? (
+                    <Image
+                      source={{ uri: item.profilePicture }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarInitial}>{initial}</Text>
+                    </View>
+                  )}
+                  <View style={styles.contactContent}>
+                    <Text style={styles.contactName} numberOfLines={1}>
+                      {displayName}
+                    </Text>
+                    <Text style={styles.contactTitle} numberOfLines={1}>
+                      {item.username ? `@${item.username}` : item.bio || 'Circle Proof member'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.centerState}>
+                <Text style={styles.stateText}>
+                  {contactSearch.trim()
+                    ? 'No matching users found.'
+                    : 'Search by name or username to start a conversation.'}
+                </Text>
+              </View>
+            }
+          />
+        )}
       </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Image source={require('../../assets/icons/back.png')} style={styles.backIcon} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Messages</Text>
-        </View>
-
-        {/* Chat Header with User Info */}
-        <View style={styles.chatHeader}>
-          <TouchableOpacity
-            style={styles.chatOverlay}
-            activeOpacity={1}
-            onPress={() => setShowChatTooltip(false)}
-          >
-            <Image source={{ uri: user.avatar }} style={styles.chatAvatar} />
-            <View style={styles.chatHeaderInfo}>
-              <View style={styles.userNameContainer}>
-                <Text style={styles.chatHeaderName}>{user.name}</Text>
-                {user.isOnline && <View style={styles.onlineIndicator} />}
-              </View>
-              <TouchableOpacity>
-                <Text style={styles.seeProfile}>👁 See profile</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-          <View style={styles.chatMoreButtonContainer}>
-            <TouchableOpacity
-              style={styles.moreOptionsButton}
-              onPress={() => setShowChatTooltip(!showChatTooltip)}
-            >
-              <Text style={styles.moreOptionsText}>⋯</Text>
-            </TouchableOpacity>
-            {showChatTooltip && (
-              <View style={styles.chatTooltip}>
-                <TouchableOpacity
-                  style={styles.tooltipItem}
-                  onPress={() => handleChatTooltipAction('mute')}
-                >
-                  <Text style={styles.tooltipText}>🔇 Mute conversation</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.tooltipItem}
-                  onPress={() => handleChatTooltipAction('block')}
-                >
-                  <Text style={styles.tooltipText}>🚫 Block user</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.tooltipItem}
-                  onPress={() => handleChatTooltipAction('report')}
-                >
-                  <Text style={styles.tooltipText}>⚠️ Report user</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tooltipItem, styles.tooltipItemLast]}
-                  onPress={() => handleChatTooltipAction('clear')}
-                >
-                  <Text style={styles.tooltipText}>🗑 Clear chat history</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Messages List */}
-        <TouchableOpacity
-          style={styles.chatMessagesOverlay}
-          activeOpacity={1}
-          onPress={() => setShowChatTooltip(false)}
-        >
-          <FlatList
-            data={messages}
-            renderItem={({ item, index }) => <ChatMessage item={item} index={index} />}
-            keyExtractor={(item) => item.id}
-            style={styles.chatMessagesList}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.messagesContainer}
-          />
-        </TouchableOpacity>
-
-        {/* Input Section */}
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TouchableOpacity style={styles.attachButton}>
-              <Text style={styles.attachIcon}>📎</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cameraButton}>
-             <Image source={require('../../assets/icons/video.png')} style={{width: 30, height: 30}} />
-            </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.micButton}>
-              <Text style={styles.micIcon}>🎤</Text>
-            </TouchableOpacity> */}
-          </View>
-          <View style={styles.messageInputContainer}>
-            <TextInput
-              style={styles.messageInput}
-              placeholder="Type a message..."
-              placeholderTextColor="#999"
-              value={messageInput}
-              onChangeText={setMessageInput}
-              multiline
-              maxLength={1000}
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, messageInput.trim() && styles.sendButtonActive]}
-              onPress={sendMessage}
-              disabled={!messageInput.trim()}
-            >
-              <Text style={[styles.sendIcon, messageInput.trim() && styles.sendIconActive]}>➤</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
-  );
-};
-
-// Main Chat App Component
-const ChatApp = () => {
-  const [currentScreen, setCurrentScreen] = useState<string>('messages'); // 'messages', 'newMessage', 'chat'
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
-
-  const navigateToChat = (userId: string) => {
-    setSelectedUserId(userId);
-    setCurrentScreen('chat');
-  };
-
-  const navigateBack = () => {
-    if (currentScreen === 'chat') {
-      setCurrentScreen('messages');
-      setSelectedUserId(null);
-    } else if (currentScreen === 'newMessage') {
-      setCurrentScreen('messages');
-    }
-  };
-
-  const handleTooltipAction = (action: string, messageId: string) => {
-    console.log(`${action} action for message ${messageId}`);
-    // Add your logic here for each action
-    switch (action) {
-      case 'delete':
-        // Handle delete logic
-        break;
-      case 'spam':
-        // Handle mark as spam logic
-        break;
-      case 'pin':
-        // Handle pin to top logic
-        break;
-      default:
-        break;
-    }
-    setActiveTooltip(null);
-  };
-
-  const MessageItem = ({ item }: { item: any }) => (
-    <View style={styles.messageItemContainer}>
-      <TouchableOpacity
-        style={styles.messageItem}
-        onPress={() => navigateToChat(item.userId)}
-      >
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-        <View style={styles.messageContent}>
-          <View style={styles.messageHeader}>
-            <Text style={styles.messageName}>{item.name}</Text>
-            <Text style={styles.messageTime}>{item.time}</Text>
-          </View>
-          <Text style={styles.messageText} numberOfLines={1}>
-            {item.message}
-          </Text>
-        </View>
-        {item.unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadText}>{item.unreadCount}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-      <View style={styles.moreButtonContainer}>
-        <TouchableOpacity
-          style={styles.moreButton}
-          onPress={() => setActiveTooltip(activeTooltip === item.id ? null : item.id)}
-        >
-          <Text style={styles.moreText}>⋯</Text>
-        </TouchableOpacity>
-        {activeTooltip === item.id && (
-          <View style={styles.tooltip}>
-            <TouchableOpacity
-              style={styles.tooltipItem}
-              onPress={() => handleTooltipAction('delete', item.id)}
-            >
-              <Text style={styles.tooltipText}>🗑 Delete</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tooltipItem}
-              onPress={() => handleTooltipAction('spam', item.id)}
-            >
-              <Text style={styles.tooltipText}>⚠️ Mark as spam</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tooltipItem, styles.tooltipItemLast]}
-              onPress={() => handleTooltipAction('pin', item.id)}
-            >
-              <Text style={styles.tooltipText}>📌 Pin to top</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-
-  const ContactItem = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.contactItem}
-      onPress={() => navigateToChat(item.userId)}
-    >
-      <Image source={{ uri: item.avatar }} style={styles.avatar} />
-      <View style={styles.contactContent}>
-        <Text style={styles.contactName}>{item.name}</Text>
-        <Text style={styles.contactTitle}>{item.title}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const MessagesScreen = () => (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-        {/* <Image source={require('../../assets/icons/back.png')} style={styles.backIcon} /> */}
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Messages</Text>
       </View>
 
@@ -600,77 +493,169 @@ const ChatApp = () => {
           style={styles.searchInput}
           placeholder="Search messages"
           placeholderTextColor="#666"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={searchTerm}
+          onChangeText={setSearchTerm}
         />
-        <TouchableOpacity style={styles.searchIcon}>
-          <Text>🔍</Text>
-        </TouchableOpacity>
+        {searchTerm.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => setSearchTerm('')}
+          >
+            <Text style={styles.clearButtonText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.filterRow}>
+        {(['all', 'unread', 'pinned'] as const).map(filter => (
+          <TouchableOpacity
+            key={filter}
+            style={[
+              styles.filterChip,
+              activeFilter === filter && styles.filterChipActive,
+            ]}
+            onPress={() => setActiveFilter(filter)}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === filter && styles.filterChipTextActive,
+              ]}
+            >
+              {filter.charAt(0).toUpperCase() + filter.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <TouchableOpacity
         style={styles.newMessageButton}
-        onPress={() => setCurrentScreen('newMessage')}
+        onPress={() => setCurrentView('newMessage')}
       >
         <Text style={styles.newMessageIcon}>✉</Text>
         <Text style={styles.newMessageText}>New message</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={() => setActiveTooltip(null)}
-      >
+      {loadingThreads ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.stateText}>Loading messages...</Text>
+        </View>
+      ) : (
         <FlatList
-          data={mockMessages}
-          renderItem={({ item }) => <MessageItem item={item} />}
-          keyExtractor={(item) => item.id}
+          data={filteredThreads}
+          keyExtractor={item => String(item.id)}
           style={styles.messagesList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadThreads({ silent: true });
+              }}
+            />
+          }
+          renderItem={({ item }) => {
+            const peerName =
+              item.otherUser?.fullName ||
+              item.otherUser?.username ||
+              item.otherUser?.email ||
+              'User';
+            const initial = peerName.charAt(0).toUpperCase();
+            const previewText = item.lastMessage?.body || 'No messages yet';
+            const timestamp = formatThreadTimestamp(
+              item.lastMessage?.createdAt || item.lastMessageAt,
+            );
+            const unread = item.unreadCount || 0;
+            const threadIdStr = String(item.id);
+
+            return (
+              <View style={styles.messageItemContainer}>
+                <TouchableOpacity
+                  style={styles.messageItem}
+                  onPress={() => openThread(item)}
+                >
+                  {item.otherUser?.profilePicture ? (
+                    <Image
+                      source={{ uri: item.otherUser.profilePicture }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarInitial}>{initial}</Text>
+                    </View>
+                  )}
+                  <View style={styles.messageContent}>
+                    <View style={styles.messageHeader}>
+                      <Text style={styles.messageName} numberOfLines={1}>
+                        {item.isPinned ? `📌 ${peerName}` : peerName}
+                      </Text>
+                      <Text style={styles.messageTime}>{timestamp}</Text>
+                    </View>
+                    <Text style={styles.messageText} numberOfLines={1}>
+                      {previewText}
+                    </Text>
+                  </View>
+                  {unread > 0 && (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadText}>{unread}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <View style={styles.moreButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.moreButton}
+                    onPress={() =>
+                      setActiveTooltip(
+                        activeTooltip === threadIdStr ? null : threadIdStr,
+                      )
+                    }
+                  >
+                    <Text style={styles.moreText}>⋯</Text>
+                  </TouchableOpacity>
+                  {activeTooltip === threadIdStr && (
+                    <View style={styles.tooltip}>
+                      <TouchableOpacity
+                        style={styles.tooltipItem}
+                        onPress={() => handleTooltipAction('pin', item)}
+                      >
+                        <Text style={styles.tooltipText}>
+                          {item.isPinned ? 'Unpin chat' : 'Pin to top'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.tooltipItem}
+                        onPress={() => handleTooltipAction('spam', item)}
+                      >
+                        <Text style={styles.tooltipText}>Mark as spam</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.tooltipItem, styles.tooltipItemLast]}
+                        onPress={() => handleTooltipAction('delete', item)}
+                      >
+                        <Text style={[styles.tooltipText, styles.dangerText]}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.centerState}>
+              <Text style={styles.stateText}>
+                {searchTerm.trim()
+                  ? 'No conversations match your search.'
+                  : 'No messages yet. Tap "New message" to start chatting!'}
+              </Text>
+            </View>
+          }
         />
-      </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
-
-  const NewMessageScreen = () => (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={navigateBack}
-        >
-          <Image source={require('../../assets/icons/back.png')} style={styles.backIcon} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Message</Text>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search contacts..."
-          placeholderTextColor="#666"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        <TouchableOpacity style={styles.searchIcon}>
-          <Text>🔍</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={mockContacts}
-        renderItem={({ item }) => <ContactItem item={item} />}
-        keyExtractor={(item) => item.id}
-        style={styles.contactsList}
-      />
-    </SafeAreaView>
-  );
-
-  // Render based on current screen
-  if (currentScreen === 'chat' && selectedUserId) {
-    return <ChatInterface userId={selectedUserId} onBack={navigateBack} />;
-  }
-
-  return currentScreen === 'messages' ? <MessagesScreen /> : <NewMessageScreen />;
 };
 
 const styles = StyleSheet.create({
@@ -685,12 +670,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    marginTop: 24,
   },
   backButton: {
     marginRight: 16,
   },
-
+  backIcon: {
+    width: 24,
+    height: 24,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -699,62 +686,104 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
     backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    margin: 16,
+    marginBottom: 10,
     paddingHorizontal: 12,
+    borderRadius: 8,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     fontSize: 16,
     color: '#000',
   },
-  searchIcon: {
-    padding: 4,
+  clearButton: {
+    padding: 6,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f2f2f2',
+  },
+  filterChipActive: {
+    backgroundColor: '#007AFF',
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: '#444',
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: '#fff',
   },
   newMessageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: '#e3f2fd',
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   newMessageIcon: {
-    color: '#fff',
-    fontSize: 16,
-    marginRight: 8,
+    fontSize: 18,
+    color: '#1976d2',
+    marginRight: 12,
   },
   newMessageText: {
-    color: '#fff',
     fontSize: 16,
+    color: '#1976d2',
     fontWeight: '500',
   },
   messagesList: {
     flex: 1,
   },
   messageItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
     position: 'relative',
   },
   messageItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  overlay: {
-    flex: 1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     marginRight: 12,
+  },
+  avatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
   },
   messageContent: {
     flex: 1,
@@ -769,24 +798,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
+    flex: 1,
+    marginRight: 8,
   },
   messageTime: {
     fontSize: 12,
-    color: '#666',
+    color: '#999',
   },
   messageText: {
     fontSize: 14,
     color: '#666',
-    lineHeight: 18,
   },
   unreadBadge: {
-    backgroundColor: '#ff4444',
+    backgroundColor: '#4CAF50',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+    paddingHorizontal: 5,
   },
   unreadText: {
     color: '#fff',
@@ -794,38 +825,35 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   moreButtonContainer: {
-    position: 'absolute',
-    right: 16,
-    top: 12,
-    zIndex: 1000,
+    position: 'relative',
   },
   moreButton: {
-    padding: 8,
+    padding: 12,
   },
   moreText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    color: '#999',
   },
   tooltip: {
     position: 'absolute',
-    top: 36,
-    right: 0,
+    right: 12,
+    top: 38,
     backgroundColor: '#fff',
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    paddingVertical: 4,
     minWidth: 150,
-    zIndex: 1001,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   tooltipItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -834,7 +862,10 @@ const styles = StyleSheet.create({
   },
   tooltipText: {
     fontSize: 14,
-    color: '#000',
+    color: '#333',
+  },
+  dangerText: {
+    color: '#D32F2F',
   },
   contactsList: {
     flex: 1,
@@ -857,265 +888,22 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   contactTitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
   },
-  // Chat Interface Styles
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
-    position: 'relative',
-  },
-  chatOverlay: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  centerState: {
     flex: 1,
-  },
-  chatMoreButtonContainer: {
-    position: 'relative',
-    zIndex: 1000,
-  },
-  chatMessagesOverlay: {
-    flex: 1,
-  },
-  chatAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  chatHeaderInfo: {
-    flex: 1,
-  },
-  userNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  chatHeaderName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginRight: 6,
-  },
-  onlineIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
-  },
-  seeProfile: {
-    fontSize: 12,
-    color: '#666',
-  },
-  moreOptionsButton: {
-    padding: 8,
-  },
-  moreOptionsText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  chatTooltip: {
-    position: 'absolute',
-    top: 36,
-    right: 0,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    minWidth: 180,
-    zIndex: 1001,
-  },
-  dateHeader: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  dateText: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    fontSize: 12,
-    color: '#666',
-  },
-  chatMessagesList: {
-    flex: 1,
-  },
-  messagesContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  chatMessageContainer: {
-    marginVertical: 12,
-  },
-  currentUserMessage: {
-    alignItems: 'flex-end',
-  },
-  otherUserMessage: {
-    alignItems: 'flex-start',
-  },
-  senderInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    maxWidth: '85%',
-  },
-  senderAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
-    marginTop: 4,
+    paddingHorizontal: 24,
+    paddingVertical: 48,
   },
-  senderInitial: {
-    color: '#fff',
+  stateText: {
+    marginTop: 10,
     fontSize: 14,
-    fontWeight: 'bold',
-  },
-  messageWrapper: {
-    flex: 1,
-  },
-  senderName: {
-    fontSize: 12,
     color: '#666',
-    marginBottom: 2,
-  },
-  chatBubble: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    maxWidth: '100%',
-  },
-  currentUserMessageWrapper: {
-    alignItems: 'flex-end',
-    maxWidth: '85%',
-    alignSelf: 'flex-end',
-  },
-  currentUserBubble: {
-    backgroundColor: '#000000ff',
-    marginLeft: 40,
- 
-  },
-  chatMessageText: {
-    fontSize: 14,
-    color: '#000',
-    lineHeight: 18,
-  },
-  currentUserText: {
-    color: '#fff',
-  },
-  currentUserWithAvatar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-  },
-  currentUserAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginLeft: 8, // Avatar appears after the message in the row for current user
-  },
-  senderMessageTime: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  currentUserMessageTime: {
-    fontSize: 12,
-    color: '#ccc',
-    marginTop: 4,
-    textAlign: 'right',
-  },
-  inputContainer: {
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  attachButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  attachIcon: {
-    fontSize: 18,
-  },
-  cameraButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  cameraIcon: {
-    fontSize: 18,
-  },
-  micButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  micIcon: {
-    fontSize: 18,
-  },
-  messageInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: '#f8f8f8',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 44,
-  },
-  messageInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
-    maxHeight: 100,
-    paddingVertical: 8,
-    textAlignVertical: 'center',
-  },
-  sendButton: {
-    marginLeft: 8,
-    padding: 4,
-    opacity: 0.5,
-  },
-  sendButtonActive: {
-    opacity: 1,
-  },
-  sendIcon: {
-    fontSize: 18,
-    color: '#999',
-  },
-  sendIconActive: {
-    color: '#007AFF',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#999',
     textAlign: 'center',
-    marginTop: 50,
   },
-  backIcon:{
-    height: 20,
-    width: 20
-  }
-  
 });
 
-export default ChatApp;
+export default ChatScreen;

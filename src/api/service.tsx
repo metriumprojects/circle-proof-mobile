@@ -1,6 +1,6 @@
 // util/api.ts
 import axios from 'axios';
-import { getStoredToken, clearAuthData } from '../util/authController';
+import { getActiveToken, clearAuthData } from '../util/authController';
 import { APP_CONFIG } from '../config/appConfig';
 
 const base_url = APP_CONFIG.API_BASE_URL;
@@ -21,8 +21,7 @@ export const apiFile = axios.create({
 
 // Attach token dynamically
 const attachToken = async (config: any) => {
-  const token = await getStoredToken();
-  console.log(token, 'khkh');
+  const token = await getActiveToken();
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -75,9 +74,9 @@ export const signUp = (data: {
 // ========================
 // USER API ENDPOINTS
 // ========================
-export const getCurrentUser = () => api.get('/user');
+export const getCurrentUser = () => api.get('/users/profile');
 
-export const updateUserProfile = (data: any) => api.put('/user', data);
+export const updateUserProfile = (data: any) => api.put('/users/profile', data);
 export const deleteUserProfile = () => api.delete('/users/profile');
 
 // ========================
@@ -92,31 +91,32 @@ export const getAllPosts = (page: number = 1) =>
 export const getCurrentUserPosts = (page: number = 1) =>
   api.get(`/user-posts?page=${page}`);
 
-export const getUserPostsById = (userId: number, page: number = 1) =>
+export const getUserPostsById = (userId: number | string, page: number = 1) =>
   api.get(`/user-posts/${userId}?page=${page}`);
 
 // ========================
 // POST INTERACTIONS API ENDPOINTS
 // ========================
-export const likePost = (postId: number) => api.post(`/${postId}/like`);
+export const likePost = (postId: number | string) => api.post(`/${postId}/like`);
 
 export const addComment = (
-  postId: number,
-  data: { content: string; parentCommentId?: number },
+  postId: number | string,
+  data: { content: string; parentCommentId?: number | string },
 ) => api.post(`/${postId}/comment`, data);
 
-export const getPostLikes = (postId: number) => api.get(`/${postId}/likes`);
+export const getPostLikes = (postId: number | string) =>
+  api.get(`/${postId}/likes`);
 
 // ========================
 // COMMENTS API ENDPOINTS
 // ========================
-export const getPostComments = (postId: number) =>
+export const getPostComments = (postId: number | string) =>
   api.get(`/${postId}/comments`);
 
-export const getCommentDetails = (commentId: number) =>
+export const getCommentDetails = (commentId: number | string) =>
   api.get(`/comments/${commentId}`);
 
-export const likeComment = (commentId: number) => {
+export const likeComment = (commentId: number | string) => {
   console.log('Liking comment with ID:', commentId);
   return api.post(`/comments/${commentId}/like`);
 };
@@ -207,16 +207,16 @@ export const addPosition = (
 };
 
 export const verifyPosition = (
-  positionId: number,
+  positionId: number | string,
   data: { status: string; comments: string },
 ) => api.post(`/positions/${positionId}/validations`, data);
 
-export const editPosition = (positionId: number, data: any) =>
+export const editPosition = (positionId: number | string, data: any) =>
   api.put(`/positions/${positionId}`, data);
 
 export const fetchProfileStats = () => api.get('/users/stats');
 
-export const fetchSpecificUserProfileStats = (userId: number) =>
+export const fetchSpecificUserProfileStats = (userId: number | string) =>
   api.get(`/users/stats/${userId}`);
 
 export const updateProfilePicture = (data: FormData) =>
@@ -234,7 +234,7 @@ export const updateProfile = (data: any) => {
 };
 
 interface ReorderValidations {
-  validationId: number;
+  validationId: number | string;
   order: number;
 }
 
@@ -243,13 +243,19 @@ interface ToggleValidation {
 }
 
 export const reorderValidations = (payload: ReorderValidations[]) => api.put('/validations/reorder', payload);
-export const toggleValidation = (validationId: number, payload: ToggleValidation) => api.put(`/validations/${validationId}/visibility`, payload);
+export const toggleValidation = (validationId: number | string, payload: ToggleValidation) => api.put(`/validations/${validationId}/visibility`, payload);
 
 export const fetchProfile = () => api.get('/users/profile');
 
-export const followUser = (data: any) => api.post('/users/follow', data);
+export const followUser = (data: any) =>
+  api.post('/users/follow-toggle', {
+    followingId: data?.followingId ?? data?.userId ?? data,
+  });
 
-export const unfollowUser = (data: any) => api.post('/users/unfollow', data);
+export const unfollowUser = (data: any) =>
+  api.post('/users/follow-toggle', {
+    followingId: data?.followingId ?? data?.userId ?? data,
+  });
 
 export const toggleFollow = (data: any) =>
   api.post('/users/follow-toggle', data);
@@ -265,22 +271,31 @@ export const addCompany = (data: any) => {
   return apiFile.post('/companies/create', data);
 };
 
-export const getCompanyById = (id: number) => api.get(`/companies/${id}`);
+export const getCompanyById = (id: number | string) => api.get(`/companies/${id}`);
 
 export const addAchievement = (data: any) => {
   console.log('Adding achievement with data:', data);
   return apiFile.post('/achievements/create', data);
 };
 
-export const fetchTimeLineByUserId = (userId: number, page: number = 1) =>
-  api.get(`/timeline/user/${userId}?page=${page}`);
+export const fetchTimeLineByUserId = (
+  userId: number | string,
+  page: number = 1,
+) => api.get(`/timeline/user/${userId}?page=${page}`);
 
 export const fetchMyTimeline = (page: number = 1) =>
   api.get(`/timeline/me?page=${page}`);
 
-export const searchQuery = (query: string) => api.get(`/search?q=${query}`);
+export const searchQuery = (query: string) =>
+  api.get(`/search?q=${encodeURIComponent(query)}`);
 
-export const likeUnlikeTimeline = (timelineId: number, entityType: string) => {
+export const searchUsers = (query: string) =>
+  api.get(`/search?q=${encodeURIComponent(query)}`);
+
+export const likeUnlikeTimeline = (
+  timelineId: number | string,
+  entityType: string,
+) => {
   console.log(
     'Liking/Unliking timeline with ID:',
     timelineId,
@@ -290,18 +305,22 @@ export const likeUnlikeTimeline = (timelineId: number, entityType: string) => {
   return api.post(`/timeline/${timelineId}/like`, { entityType });
 };
 
-export const fetchPositionsById = (id: number) => api.get(`/positions/${id}`);
+export const fetchPositionsById = (id: number | string) =>
+  api.get(`/positions/${id}`);
 
-export const fetchAchievementsById = (id: number) =>
+export const fetchAchievementsById = (id: number | string) =>
   api.get(`/achievements/${id}`);
 
-export const updatePosition = (positionId: number, data: any) => {
+export const updatePosition = (positionId: number | string, data: any) => {
   console.log('Updating position with ID:', positionId);
   console.log('Update data:', data);
   return apiFile.put(`/positions/${positionId}`, data);
 };
 
-export const fetchTimelineLikes = (timelineId: number, entityType: string) => {
+export const fetchTimelineLikes = (
+  timelineId: number | string,
+  entityType: string,
+) => {
   console.log(
     'Fetching likes for timeline ID:',
     timelineId,
@@ -311,21 +330,23 @@ export const fetchTimelineLikes = (timelineId: number, entityType: string) => {
   return api.get(`/timeline/${timelineId}/likes?entityType=${entityType}`);
 };
 
-export const fetchTimelineComments = (timelineId: number, entityType: string) =>
-  api.get(`/timeline/${timelineId}/comments?entityType=${entityType}`);
+export const fetchTimelineComments = (
+  timelineId: number | string,
+  entityType: string,
+) => api.get(`/timeline/${timelineId}/comments?entityType=${entityType}`);
 
 export const addTimelineComment = (
-  timelineId: number,
+  timelineId: number | string,
   data: any,
   entityType: string,
 ) => api.post(`/timeline/${timelineId}/comment`, { ...data, entityType });
 
-export const updateAchievement = (achievementId: number, data: any) => {
+export const updateAchievement = (achievementId: number | string, data: any) => {
   console.log('[updateAchievement] ID:', achievementId, 'Data:', data);
   return apiFile.put(`/achievements/${achievementId}`, data);
 };
 
-export const fetchCompanyVerificationListById = (id: number) =>
+export const fetchCompanyVerificationListById = (id: number | string) =>
   api.get(`/companies/${id}/items`);
 
 export const requestVerification = (data: any) => {
@@ -340,6 +361,9 @@ export const receivedVerificationRequest = (type?: string) => {
   }
   return api.get(url);
 };
+
+export const sentVerificationRequest = () =>
+  api.get('/validations/requests/sent');
 
 export const validationRequest = (
   requestId: number | string,
@@ -368,12 +392,14 @@ export const confirmVerificationRequest = (
   maybeData?: any,
 ) => {
   if (maybeData !== undefined) {
-    return api.post(
+    const client = maybeData instanceof FormData ? apiFile : api;
+    return client.post(
       `/validations/requests/${requestId}/items/${itemIdOrData}/confirm`,
       maybeData,
     );
   }
-  return api.post(`/validations/requests/${requestId}/confirm`, itemIdOrData);
+  const client = itemIdOrData instanceof FormData ? apiFile : api;
+  return client.post(`/validations/requests/${requestId}/confirm`, itemIdOrData);
 };
 
 export const cancelVerificationRequest = (
@@ -396,7 +422,7 @@ export const getValidationOptions = (
   return api.get(`/validations/requests/${requestId}/items/${itemId}/options`);
 };
 
-export const toggleTimelineCommentLike = (commentId: number) => {
+export const toggleTimelineCommentLike = (commentId: number | string) => {
   console.log('Liking timeline comment with ID:', commentId);
   return api.post(`/timeline/comments/${commentId}/like`);
 };
@@ -404,13 +430,18 @@ export const getSchoolList = () => api.get(`/education/schools`);
 export const getEducationData = (page: number = 1) =>
   api.get(`/education/feed/me?page=${page}`);
 
-export const getEducationDataById = (educationId: number, page: number = 1) =>
-  api.get(`/education/feed/${educationId}?page=${page}`);
+export const getEducationDataById = (
+  educationId: number | string,
+  page: number = 1,
+) => api.get(`/education/feed/${educationId}?page=${page}`);
 
-export const getEducationByid = (educationId: number) =>
+export const getEducationByid = (educationId: number | string) =>
   api.get(`/education/${educationId}`);
 
-export const editEducationWithId = (educationId: number, data: FormData) => {
+export const editEducationWithId = (
+  educationId: number | string,
+  data: FormData,
+) => {
   console.log('Editing education with ID:', educationId, 'Data:', data);
   return apiFile.put(`/education/${educationId}`, data);
 };
@@ -420,13 +451,15 @@ export const createEducationAchievement = (data: FormData) => {
   return apiFile.post('/education/achievement/create', data);
 };
 
-export const getEducationAchievementById = (educationAchievementId: number) => {
+export const getEducationAchievementById = (
+  educationAchievementId: number | string,
+) => {
   console.log('Getting education achievement with ID:', educationAchievementId);
   return api.get(`/education/achievement/${educationAchievementId}`);
 };
 
 export const editEducationAchievementWithId = (
-  educationAchievementId: number,
+  educationAchievementId: number | string,
   data: FormData,
 ) => {
   console.log(
@@ -470,31 +503,36 @@ export const createEducation = (data: FormData) => {
 export const createSkill = (data: any) => apiFile.post('/skill/create', data);
 
 // Edit Skill by Id
-export const editSkill = (skillId: number, data: any) =>
+export const editSkill = (skillId: number | string, data: any) =>
   apiFile.put(`/skill/${skillId}`, data);
 
 // Get specific Skill details by Id
-export const getSkillById = (skillId: number) => api.get(`/skill/${skillId}`);
+export const getSkillById = (skillId: number | string) =>
+  api.get(`/skill/${skillId}`);
 
 // Get all skills by current user
 export const fetchMySkills = (page: number = 1) =>
   api.get(`/skill/feed/me?page=${page}`);
 
 // Get all skills for specific user by userId
-export const fetchSkillsByUserId = (userId: number, page: number = 1) =>
-  api.get(`/skill/feed/${userId}?page=${page}`);
+export const fetchSkillsByUserId = (
+  userId: number | string,
+  page: number = 1,
+) => api.get(`/skill/feed/${userId}?page=${page}`);
 
-export const addSkillLikeUnlike = (Id: number) => api.post(`/skill/${Id}/like`);
+export const addSkillLikeUnlike = (Id: number | string) =>
+  api.post(`/skill/${Id}/like`);
 
-export const addSkillCommentReply = (Id: number, data: any) =>
+export const addSkillCommentReply = (Id: number | string, data: any) =>
   api.post(`/skill/${Id}/comment`, data);
 
-export const fetchSkillComments = (Id: number) =>
+export const fetchSkillComments = (Id: number | string) =>
   api.get(`/skill/${Id}/comments`);
 
-export const fetchSkillLikes = (Id: number) => api.get(`/skill/${Id}/likes`);
+export const fetchSkillLikes = (Id: number | string) =>
+  api.get(`/skill/${Id}/likes`);
 
-export const likeSkillCommentReply = (Id: number) =>
+export const likeSkillCommentReply = (Id: number | string) =>
   api.post(`/skill/comment/${Id}/like`);
 
 // Create Hobby
@@ -507,29 +545,32 @@ export const createHobby = (data: any) => apiFile.post('/hobbies/create', data);
 export const fetchMyHobbies = () => api.get('/hobbies/feed/me');
 
 // Fetch Hobbies by user ID
-export const fetchHobbiesByUserId = (userId: number, page: number = 1) =>
-  api.get(`/hobbies/feed/${userId}?page=${page}`);
+export const fetchHobbiesByUserId = (
+  userId: number | string,
+  page: number = 1,
+) => api.get(`/hobbies/feed/${userId}?page=${page}`);
 
 // Hobby details by ID
-export const getHobbyById = (hobbyId: number) => api.get(`/hobbies/${hobbyId}`);
+export const getHobbyById = (hobbyId: number | string) =>
+  api.get(`/hobbies/${hobbyId}`);
 
 // Edit Hobby by ID
-export const editHobby = (hobbyId: number, data: any) =>
+export const editHobby = (hobbyId: number | string, data: any) =>
   apiFile.put(`/hobbies/${hobbyId}`, data);
 
-export const addHobbyLikeUnlike = (Id: number) =>
+export const addHobbyLikeUnlike = (Id: number | string) =>
   api.post(`/hobbies/feed/${Id}/like`);
 
-export const addHobbyCommentReply = (Id: number, data: any) =>
+export const addHobbyCommentReply = (Id: number | string, data: any) =>
   api.post(`/hobbies/feed/${Id}/comment`, data);
 
-export const fetchHobbyComments = (Id: number) =>
+export const fetchHobbyComments = (Id: number | string) =>
   api.get(`/hobbies/feed/${Id}/comments`);
 
-export const fetchHobbyLikes = (Id: number) =>
+export const fetchHobbyLikes = (Id: number | string) =>
   api.get(`/hobbies/feed/${Id}/likes`);
 
-export const likeHobbyCommentReply = (Id: number) =>
+export const likeHobbyCommentReply = (Id: number | string) =>
   api.post(`/hobbies/comment/${Id}/like`);
 
 // Create Aspiration
@@ -545,15 +586,17 @@ export const fetchMyAspirations = (page: number = 1) =>
   api.get(`/aspirations/feed/me?page=${page}`);
 
 // Fetch Aspirations by specific User ID
-export const fetchAspirationsByUserId = (userId: number, page: number = 1) =>
-  api.get(`/aspirations/feed/user/${userId}?page=${page}`);
+export const fetchAspirationsByUserId = (
+  userId: number | string,
+  page: number = 1,
+) => api.get(`/aspirations/feed/user/${userId}?page=${page}`);
 
 // Get Aspiration details by ID
-export const getAspirationById = (aspirationId: number) =>
+export const getAspirationById = (aspirationId: number | string) =>
   api.get(`/aspirations/${aspirationId}`);
 
 // Update Aspiration
-export const editAspiration = (aspirationId: number, data: any) => {
+export const editAspiration = (aspirationId: number | string, data: any) => {
   console.log(data, 'aspiration data');
   if (data instanceof FormData) {
     return apiFile.put(`/aspirations/${aspirationId}`, data);
@@ -561,19 +604,19 @@ export const editAspiration = (aspirationId: number, data: any) => {
   return api.put(`/aspirations/${aspirationId}`, data);
 };
 
-export const addAspirationLikeUnlike = (Id: number) =>
+export const addAspirationLikeUnlike = (Id: number | string) =>
   api.post(`/aspirations/feed/${Id}/like`);
 
-export const addAspirationCommentReply = (Id: number, data: any) =>
+export const addAspirationCommentReply = (Id: number | string, data: any) =>
   api.post(`/aspirations/feed/${Id}/comment`, data);
 
-export const fetchAspirationComments = (Id: number) =>
+export const fetchAspirationComments = (Id: number | string) =>
   api.get(`/aspirations/feed/${Id}/comments`);
 
-export const fetchAspirationLikes = (Id: number) =>
+export const fetchAspirationLikes = (Id: number | string) =>
   api.get(`/aspirations/feed/${Id}/likes`);
 
-export const likeAspirationCommentReply = (Id: number) =>
+export const likeAspirationCommentReply = (Id: number | string) =>
   api.post(`/aspirations/comment/${Id}/like`);
 
 export const addSchool = (data: any) => {
@@ -592,16 +635,17 @@ export const fetchNotifications = (page: number = 1) =>
 export const fetchUnreadNotificationCount = () =>
   api.get('/notifications/unread-count');
 
-export const markNotificationAsRead = (notificationId: number) =>
+export const markNotificationAsRead = (notificationId: number | string) =>
   api.put(`/notifications/${notificationId}/read`);
 
 export const markAllNotificationsAsRead = () =>
   api.put('/notifications/read-all');
 
-export const fetchEducationVerificationListById = (id: number) =>
+export const fetchEducationVerificationListById = (id: number | string) =>
   api.get(`/education/${id}/items`);
 
-export const fetchHobbiesById = (id: number) => api.get(`/hobbies/${id}/items`);
+export const fetchHobbiesById = (id: number | string) =>
+  api.get(`/hobbies/${id}/items`);
 
 export const fetchSkillList = () => api.get(`/skill/list`);
 
@@ -622,47 +666,52 @@ export const checkSchoolName = (query: string) =>
 
 export const addSectionAchievement = (
   type: string,
-  referenceId: number,
+  referenceId: number | string,
   data: any,
 ) => {
   console.log('Adding achievement with data:', type, referenceId, data);
   return apiFile.post(`/section-achievements/${type}/${referenceId}`, data);
 };
 
-export const updateSectionAchievement = (achievementId: number, data: any) => {
+export const updateSectionAchievement = (
+  achievementId: number | string,
+  data: any,
+) => {
   console.log('Updating achievement with data:', achievementId, data);
   return apiFile.put(`/section-achievements/${achievementId}`, data);
 };
 
-export const toggleLikeSectionAchievement = (achievementId: number) => {
+export const toggleLikeSectionAchievement = (achievementId: number | string) => {
   console.log('Toggling like for achievement with ID:', achievementId);
   return api.post(`/section-achievements/${achievementId}/like`);
 };
 
-export const fetchLikeListSectionAchievement = (achievementId: number) => {
+export const fetchLikeListSectionAchievement = (
+  achievementId: number | string,
+) => {
   console.log('Fetching like list for achievement with ID:', achievementId);
   return api.get(`/section-achievements/${achievementId}/likes`);
 };
 
 export const addCommentSectionAchievement = (
-  achievementId: number,
+  achievementId: number | string,
   data: any,
 ) => {
   console.log('Adding comment for achievement with ID:', achievementId, data);
   return api.post(`/section-achievements/${achievementId}/comment`, data);
 };
 
-export const fetchCommentSectionAchievement = (achievementId: number) => {
+export const fetchCommentSectionAchievement = (achievementId: number | string) => {
   console.log('Fetching comment list for achievement with ID:', achievementId);
   return api.get(`/section-achievements/${achievementId}/comments`);
 };
 
-export const likeCommentSectionAchievement = (commentId: number) => {
+export const likeCommentSectionAchievement = (commentId: number | string) => {
   console.log('Liking comment with ID:', commentId);
   return api.post(`/section-achievements/comment/${commentId}/like`);
 };
 
-export const fetchSectionAchievementById = (achievementId: number) => {
+export const fetchSectionAchievementById = (achievementId: number | string) => {
   console.log('Fetching achievement with ID:', achievementId);
   return api.get(`/section-achievements/${achievementId}`);
 };
@@ -672,9 +721,78 @@ export const verifyOtp = (data: any) => api.post('/verify-otp', data);
 export const resetPassword = (data: any) => api.post('/reset-password', data);
 
 export const fetchSocialCommentsById = (
-  commentId: number,
+  commentId: number | string,
   page: number = 1,
 ) => {
   console.log('Fetching comment list for comment with ID:', commentId);
   return api.get(`/social/comments/${commentId}/replies?page=${page}`);
 };
+
+
+// ========================
+// CHAT API ENDPOINTS
+// ========================
+export interface ChatUser {
+  id: number | string;
+  fullName?: string;
+  username?: string;
+  email?: string;
+  profilePicture?: string | null;
+}
+
+export interface ChatMessage {
+  id: string | number;
+  body: string;
+  senderId: string | number;
+  conversationId: string | number;
+  createdAt: string;
+  sender?: ChatUser;
+}
+
+export interface ChatThread {
+  id: string | number;
+  otherUserId: string | number | null;
+  otherUser?: ChatUser | null;
+  lastMessageAt?: string;
+  lastMessage?: Pick<ChatMessage, 'id' | 'body' | 'createdAt' | 'senderId'> & {
+    sender?: ChatUser;
+  };
+  unreadCount?: number;
+  isPinned?: boolean;
+  isSpam?: boolean;
+  isArchived?: boolean;
+}
+
+export const fetchChatThreads = () => api.get('/chat/threads');
+
+export const getOrCreateChatThread = (userId: number | string) =>
+  api.get(`/chat/threads/${userId}`);
+
+export const fetchChatMessages = (
+  threadId: number | string,
+  page: number = 1,
+  limit: number = 50,
+) => api.get(`/chat/threads/${threadId}/messages?page=${page}&limit=${limit}`);
+
+export const sendChatMessage = (threadId: number | string, body: string) =>
+  api.post(`/chat/threads/${threadId}/messages`, { body });
+
+export const deleteChatThread = (threadId: number | string) =>
+  api.delete(`/chat/threads/${threadId}`);
+
+export const pinChatThread = (
+  threadId: number | string,
+  pinned: boolean = true,
+) => api.post(`/chat/threads/${threadId}/pin`, { pinned });
+
+export const spamChatThread = (threadId: number | string) =>
+  api.post(`/chat/threads/${threadId}/spam`);
+
+export const fetchUserSuggestions = (limit: number = 15) =>
+  api.get(`/users/suggestions?limit=${limit}`);
+
+export const fetchUserConnections = (
+  userId: number | string,
+  page: number = 1,
+  limit: number = 20,
+) => api.get(`/users/${userId}/connections?page=${page}&limit=${limit}`);

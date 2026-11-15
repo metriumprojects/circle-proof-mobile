@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,22 +9,19 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import {
   fetchHobbiesByUserId,
   addHobbyLikeUnlike,
-  addEducationLikesUnlike,
   toggleLikeSectionAchievement,
 } from '../api/service';
-import { useState, useEffect } from 'react';
 import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -141,7 +138,6 @@ interface Pagination {
 }
 
 const ProfileHobbyView = ({ userId }: { userId?: number }) => {
-  const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const targetUserId = userId || route.params?.userId;
   const [hobbyGroups, setHobbyGroups] = useState<HobbyGroup[]>([]);
@@ -150,7 +146,9 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [expandedDescriptions, setExpandedDescriptions] = useState<{
     [key: number]: boolean;
   }>({});
@@ -176,12 +174,12 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'hobby') => {
+    (itemId: number | string, increment: number, type: string = 'hobby') => {
       setHobbyGroups(prevGroups => {
         return prevGroups.map(group => ({
           ...group,
           entries: group.entries.map(entry => {
-            if (type === 'hobby' && entry.id === itemId) {
+            if (type === 'hobby' && String(entry.id) === String(itemId)) {
               return {
                 ...entry,
                 commentsCount: entry.commentsCount + increment,
@@ -193,7 +191,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
               entry.achievements.length > 0
             ) {
               const updatedAchievements = entry.achievements.map(ach => {
-                if (Number(ach.id) === Number(itemId)) {
+                if (String(ach.id) === String(itemId)) {
                   return {
                     ...ach,
                     stats: {
@@ -210,7 +208,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
 
               // Check if any achievement was actually updated
               const isAchievementUpdated = entry.achievements.some(
-                ach => Number(ach.id) === Number(itemId),
+                ach => String(ach.id) === String(itemId),
               );
 
               if (isAchievementUpdated) {
@@ -225,45 +223,45 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
     [],
   );
 
-  const fetchHobbies = async (page: number = 1) => {
-    try {
-      if (page === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      console.log('Fetching hobbies for userId:', targetUserId);
-      if (!targetUserId) return;
-      const response = await fetchHobbiesByUserId(targetUserId);
-      console.log(
-        'Fetch Hobbies Response:',
-        JSON.stringify(response.data, null, 2),
-      );
-      if (response.data && response.data.data && response.data.data.hobbies) {
+  const fetchHobbies = useCallback(
+    async (page: number = 1) => {
+      try {
         if (page === 1) {
-          setHobbyGroups(response.data.data.hobbies);
+          setLoading(true);
         } else {
-          setHobbyGroups(prev => [...prev, ...response.data.data.hobbies]);
+          setLoadingMore(true);
         }
 
-        // Update pagination if available in response
-        if (response.data.data.pagination) {
-          setPagination(response.data.data.pagination);
+        console.log('Fetching hobbies for userId:', targetUserId);
+        if (!targetUserId) return;
+        const response = await fetchHobbiesByUserId(targetUserId);
+        console.log(
+          'Fetch Hobbies Response:',
+          JSON.stringify(response.data, null, 2),
+        );
+        if (response.data && response.data.data && response.data.data.hobbies) {
+          if (page === 1) {
+            setHobbyGroups(response.data.data.hobbies);
+          } else {
+            setHobbyGroups(prev => [...prev, ...response.data.data.hobbies]);
+          }
+
+          // Update pagination if available in response
+          if (response.data.data.pagination) {
+            setPagination(response.data.data.pagination);
+          }
+        } else {
+          console.log('Invalid response structure:', response.data);
         }
-      } else {
-        console.log('Invalid response structure:', response.data);
-      }
-    } catch (error) {
-      console.error('Error fetching hobbies:', error);
-    } finally {
-      if (loadingMore) {
-        setLoadingMore(false);
-      } else {
+      } catch (error) {
+        console.error('Error fetching hobbies:', error);
+      } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
-    }
-  };
+    },
+    [targetUserId],
+  );
 
   const loadMoreHobbies = async () => {
     if (pagination.hasNext && !loadingMore) {
@@ -301,7 +299,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
     } else {
       console.log('No targetUserId provided to ProfileHobbyView');
     }
-  }, [targetUserId]);
+  }, [targetUserId, fetchHobbies]);
 
   const handleLike = async (id: number, type: string = 'hobby') => {
     try {
@@ -359,7 +357,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
   };
 
   const handleStatsPress = (
-    id: number,
+    id: number | string,
     type: 'hobby' | 'achievement' = 'hobby',
   ) => {
     setCurrentItemId(id);
@@ -375,7 +373,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
 
   const renderVerifiedSection = (
     validations: Validation[],
-    parentItem: HobbyEntry | Achievement,
+    _parentItem: HobbyEntry | Achievement,
   ) => {
     if (!validations || validations?.length === 0) return null;
 
@@ -828,8 +826,8 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
               <TouchableOpacity
                 style={styles.statIconContainer}
                 onPress={() => {
-                  handleStatsPress(Number(entry.id));
-                  handleLike(Number(entry.id));
+                  handleStatsPress(entry.id);
+                  handleLike(entry.id as any);
                 }}
               >
                 <Image
@@ -844,7 +842,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
               <TouchableOpacity
                 style={styles.statCountContainer}
                 onPress={() => {
-                  handleStatsPress(Number(entry.id));
+                  handleStatsPress(entry.id);
                   setLikesModalVisible(true);
                 }}
               >
@@ -855,7 +853,7 @@ const ProfileHobbyView = ({ userId }: { userId?: number }) => {
             <TouchableOpacity
               style={styles.commentContainer}
               onPress={() => {
-                handleStatsPress(Number(entry.id));
+                handleStatsPress(entry.id);
                 setIsAddingComment(true); // Always show input in modal
                 setCommentsModalVisible(true);
               }}

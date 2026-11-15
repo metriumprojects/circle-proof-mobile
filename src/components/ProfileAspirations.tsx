@@ -24,10 +24,9 @@ import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -153,13 +152,15 @@ const ProfileAspirations = () => {
   const [aspirationsData, setAspirationsData] = useState<AspirationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingEdit, setLoadingEdit] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [, setLoadingEdit] = useState(false);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [expandedDescriptions, setExpandedDescriptions] = useState<{
     [key: string]: boolean;
   }>({});
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage] = useState(1);
   const [currentItemType, setCurrentItemType] = useState<
     'aspiration' | 'achievement' | null
   >(null);
@@ -175,10 +176,17 @@ const ProfileAspirations = () => {
 
   // Function to update comment count in local state when a comment is added
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'aspiration') => {
+    (
+      itemId: number | string,
+      increment: number,
+      type: string = 'aspiration',
+    ) => {
       setAspirationsData(prevAspirations => {
         return prevAspirations.map(aspiration => {
-          if (type === 'aspiration' && parseInt(aspiration.id) === itemId) {
+          if (
+            type === 'aspiration' &&
+            String(aspiration.id) === String(itemId)
+          ) {
             return {
               ...aspiration,
               stats: {
@@ -193,7 +201,7 @@ const ProfileAspirations = () => {
             aspiration.achievements.length > 0
           ) {
             const updatedAchievements = aspiration.achievements.map(ach => {
-              if (Number(ach.id) === Number(itemId)) {
+              if (String(ach.id) === String(itemId)) {
                 return {
                   ...ach,
                   stats: {
@@ -209,7 +217,7 @@ const ProfileAspirations = () => {
 
             // Check if any achievement was actually updated
             const isAchievementUpdated = aspiration.achievements.some(
-              ach => Number(ach.id) === Number(itemId),
+              ach => String(ach.id) === String(itemId),
             );
 
             if (isAchievementUpdated) {
@@ -223,12 +231,15 @@ const ProfileAspirations = () => {
     [],
   );
 
-  const handleLike = async (id: number, type: string = 'aspiration') => {
+  const handleLike = async (
+    id: number | string,
+    type: string = 'aspiration',
+  ) => {
     try {
       // Optimistically update the UI before making the API call
       setAspirationsData(prevAspirations => {
         return prevAspirations.map(aspiration => {
-          if (type === 'aspiration' && parseInt(aspiration.id) === id) {
+          if (type === 'aspiration' && String(aspiration.id) === String(id)) {
             const newIsLiked = !aspiration.isLiked;
             const newLikesCount = newIsLiked
               ? aspiration.stats.likesCount + 1
@@ -244,7 +255,7 @@ const ProfileAspirations = () => {
           }
           if (aspiration.achievements) {
             const updatedAchievements = aspiration.achievements.map(ach => {
-              if (type === 'achievement' && ach.id === id) {
+              if (type === 'achievement' && String(ach.id) === String(id)) {
                 const newIsLiked = !ach.isLiked;
                 return {
                   ...ach,
@@ -267,9 +278,9 @@ const ProfileAspirations = () => {
 
       // Make the API call to update the like status on the server
       if (type === 'aspiration') {
-        await addAspirationLikeUnlike(id);
+        await addAspirationLikeUnlike(id as any);
       } else if (type === 'achievement') {
-        const response = await toggleLikeSectionAchievement(id);
+        const response = await toggleLikeSectionAchievement(id as any);
         console.log('Achievement like response:', response.data);
       }
     } catch (error) {
@@ -279,7 +290,7 @@ const ProfileAspirations = () => {
   };
 
   const handleStatsPress = (
-    id: number,
+    id: number | string,
     type: 'aspiration' | 'achievement' = 'aspiration',
   ) => {
     setCurrentItemId(id);
@@ -288,9 +299,7 @@ const ProfileAspirations = () => {
 
   console.log('Is modal open:', isModalOpen);
 
-  const [selectedValue, setSelectedValue] = useState(null);
   const handleSelect = (selected: any) => {
-    setSelectedValue(selected);
     console.log('Selected:', selected);
     if (selected.value === 'aspiration') {
       setModalType('aspiration');
@@ -357,7 +366,7 @@ const ProfileAspirations = () => {
       } else {
         const aspirationItem = item as AspirationItem;
         setLoadingEdit(true);
-        const response = await getAspirationById(parseInt(aspirationItem.id));
+        const response = await getAspirationById(aspirationItem.id as any);
         if (response.data.success) {
           const aspiration = response.data.data.aspiration;
           const monthsForAspiration = [
@@ -398,7 +407,7 @@ const ProfileAspirations = () => {
     }
   };
 
-  const handleAddAchievement = (aspirationId: number) => {
+  const handleAddAchievement = (aspirationId: number | string) => {
     setModalType('achievement');
     setAchievementType('aspiration');
     setFormMode('add');
@@ -503,7 +512,7 @@ const ProfileAspirations = () => {
         onPress={() => {
           // Navigate to Verification screen with the aspiration ID
           navigation.navigate('Verification', {
-            aspirationId: parseInt(item.id),
+            aspirationId: item.id,
             isAspiration: true,
           });
         }}
@@ -956,7 +965,7 @@ const ProfileAspirations = () => {
 
   const renderAspirationItem = ({
     item,
-    index,
+    index: _index,
   }: {
     item: AspirationItem;
     index: number;
@@ -1023,7 +1032,7 @@ const ProfileAspirations = () => {
                 marginBottom: 10,
               },
             ]}
-            onPress={() => handleAddAchievement(parseInt(item.id))}
+            onPress={() => handleAddAchievement(item.id)}
           >
             <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
               + Add achievement
@@ -1056,8 +1065,8 @@ const ProfileAspirations = () => {
               <TouchableOpacity
                 style={styles.statIconContainer}
                 onPress={() => {
-                  handleStatsPress(parseInt(item.id));
-                  handleLike(parseInt(item.id));
+                  handleStatsPress(item.id);
+                  handleLike(item.id);
                 }}
               >
                 <Image
@@ -1072,7 +1081,7 @@ const ProfileAspirations = () => {
               <TouchableOpacity
                 style={styles.statCountContainer}
                 onPress={() => {
-                  handleStatsPress(parseInt(item.id));
+                  handleStatsPress(item.id);
                   setLikesModalVisible(true);
                 }}
               >
@@ -1083,7 +1092,7 @@ const ProfileAspirations = () => {
             <TouchableOpacity
               style={styles.commentContainer}
               onPress={() => {
-                handleStatsPress(parseInt(item.id));
+                handleStatsPress(item.id);
                 setIsAddingComment(true); // Always show input in modal
                 setCommentsModalVisible(true);
               }}

@@ -1,7 +1,7 @@
 //@ts-nocheck
 // App.js
 import 'react-native-gesture-handler';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -11,7 +11,6 @@ import ProfileScreen from './src/screens/Profile/ProfileScreen';
 import ProfileView from './src/screens/Profile/ProfileView';
 import ChatScreen from './src/screens/Chats/ChatScreen';
 import PostScreen from './src/screens/PostScreen';
-import ScoreScreen from './src/screens/ScoreScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import { TabIcons } from './src/icons';
 import ChatInterface from './src/screens/Chats/ChatInterface';
@@ -37,6 +36,19 @@ import NotificationScreen from './src/screens/Notifications/NotificationScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+const renderHomeTabIcon = ({ focused }: { focused: boolean }) => (
+  <TabIcons.Home focused={focused} />
+);
+const renderChatsTabIcon = ({ focused }: { focused: boolean }) => (
+  <TabIcons.Chats focused={focused} />
+);
+const renderPostTabIcon = ({ focused }: { focused: boolean }) => (
+  <TabIcons.Post focused={focused} />
+);
+const renderProfileTabIcon = ({ focused }: { focused: boolean }) => (
+  <TabIcons.Profile focused={focused} />
+);
+
 function MainTabNavigator() {
   return (
     <Tab.Navigator
@@ -51,7 +63,7 @@ function MainTabNavigator() {
         component={HomeScreen}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: ({ focused }) => <TabIcons.Home focused={focused} />,
+          tabBarIcon: renderHomeTabIcon,
         }}
       />
       <Tab.Screen
@@ -59,7 +71,7 @@ function MainTabNavigator() {
         component={ChatScreen}
         options={{
           tabBarLabel: 'Chats',
-          tabBarIcon: ({ focused }) => <TabIcons.Chats focused={focused} />,
+          tabBarIcon: renderChatsTabIcon,
         }}
       />
       <Tab.Screen
@@ -67,7 +79,7 @@ function MainTabNavigator() {
         component={PostScreen}
         options={{
           tabBarLabel: 'Post',
-          tabBarIcon: ({ focused }) => <TabIcons.Post focused={focused} />,
+          tabBarIcon: renderPostTabIcon,
         }}
       />
       <Tab.Screen
@@ -75,7 +87,7 @@ function MainTabNavigator() {
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcons.Profile focused={focused} />,
+          tabBarIcon: renderProfileTabIcon,
         }}
       />
       {/* <Tab.Screen
@@ -128,7 +140,7 @@ function AppNavigator() {
 // Custom toast configuration to handle long error messages
 const toastConfig = {
   // Success toast
-  success: ({ text1, text2, ...rest }) => (
+  success: ({ text1, text2 }) => (
     <View style={[styles.baseToast, styles.successToast]}>
       <Text style={styles.title}>{text1}</Text>
       {text2 && <Text style={styles.message} numberOfLines={0}>{text2}</Text>}
@@ -136,7 +148,7 @@ const toastConfig = {
   ),
   
   // Error toast
-  error: ({ text1, text2, ...rest }) => (
+  error: ({ text1, text2 }) => (
     <View style={[styles.baseToast, styles.errorToast]}>
       <Text style={styles.title}>{text1}</Text>
       {text2 && <Text style={styles.message} numberOfLines={0}>{text2}</Text>}
@@ -144,7 +156,7 @@ const toastConfig = {
   ),
   
   // Info toast
-  info: ({ text1, text2, ...rest }) => (
+  info: ({ text1, text2 }) => (
     <View style={[styles.baseToast, styles.infoToast]}>
       <Text style={styles.title}>{text1}</Text>
       {text2 && <Text style={styles.message} numberOfLines={0}>{text2}</Text>}

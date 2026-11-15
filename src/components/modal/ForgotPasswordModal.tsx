@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Alert,
   Dimensions,
   Image,
   ActivityIndicator,
@@ -32,7 +31,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ visible, onCl
   const [confirmSecureTextEntry, setConfirmSecureTextEntry] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isResending, setIsResending] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [isLoadingSendOtp, setIsLoadingSendOtp] = useState(false);
   const [isLoadingVerifyOtp, setIsLoadingVerifyOtp] = useState(false);
   const [isLoadingResend, setIsLoadingResend] = useState(false);

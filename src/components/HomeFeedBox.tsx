@@ -11,7 +11,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { CommonActions } from '@react-navigation/native';
 import { fetchProfileStats } from '../api/service';
-import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 const guidelineBaseWidth = 375;
@@ -27,7 +26,6 @@ const HomeFeedBox = () => {
   const [postText, setPostText] = React.useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
-  const { user } = useAuth();
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -53,7 +51,7 @@ const HomeFeedBox = () => {
     navigation.dispatch(CommonActions.navigate('Post'));
   };
 
-  const handleMediaUpload = (mediaType: 'photo' | 'video' | 'mixed' = 'mixed') => {
+  const handleMediaUpload = (_mediaType: 'photo' | 'video' | 'mixed' = 'mixed') => {
     // Navigate to Post screen when media icon is clicked
     navigation.dispatch(CommonActions.navigate('Post'));
   };

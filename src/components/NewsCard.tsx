@@ -7,15 +7,17 @@ import {
   Dimensions,
   FlatList,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import React from 'react';
 import { Video } from 'react-native-video';
 import Pdf from 'react-native-pdf';
 import LikesModal from './LikesModal';
 import CommentsModal from './CommentsModal';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { likePost, getPostComments } from '../api/service';
 import Toast from 'react-native-toast-message';
+import { extractUriString, isPdfUri } from '../util/postFormatter';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,13 +44,13 @@ interface NewsCardProps {
   profilePicture?: string; // Add profilePicture prop
   achievement?: any;
   achievementDate?: any;
-  postId?: number; // Add postId for like functionality
+  postId?: number | string; // Add postId for like functionality
   initialLikeStatus?: boolean; // Add initial like status
   initialLikeCount?: number; // Add initial like count
   recentComments?: any[]; // Added recent comments prop
   title?: string; // Added title prop
   stats?: any; // Added stats prop
-  userId?: number; // Add userId for profile navigation
+  userId?: number | string; // Add userId for profile navigation
   isVerified?: boolean;
   company?: string;
   designation?: string;
@@ -87,7 +89,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
   const [isLiked, setIsLiked] = React.useState(initialLikeStatus); // Add like status state
   const [likeCount, setLikeCount] = React.useState(initialLikeCount); // Add like count state
   const [fetchedComments, setFetchedComments] = React.useState<any[]>([]); // State for fetched comments
-  const [loadingComments, setLoadingComments] = React.useState(false); // State for loading comments
+  const [, setLoadingComments] = React.useState(false); // State for loading comments
   const [pdfLoading, setPdfLoading] = React.useState(true);
   const [pdfPages, setPdfPages] = React.useState(0);
   const [pdfError, setPdfError] = React.useState(false);
@@ -95,7 +97,17 @@ const NewsCard: React.FC<NewsCardProps> = ({
     stats?.commentsCount || 0,
   ); // Local comment count state
 
-  console.log(stats, title, recentComments, postId, 'ujuj');
+  React.useEffect(() => {
+    setIsLiked(initialLikeStatus);
+  }, [postId, initialLikeStatus]);
+
+  React.useEffect(() => {
+    setLikeCount(initialLikeCount);
+  }, [postId, initialLikeCount]);
+
+  React.useEffect(() => {
+    setCommentCount(stats?.commentsCount || 0);
+  }, [postId, stats?.commentsCount]);
 
   const navigation = useNavigation<any>();
 
@@ -109,12 +121,18 @@ const NewsCard: React.FC<NewsCardProps> = ({
       return;
     }
 
+    const previousLiked = isLiked;
+    const previousCount = likeCount;
+    setIsLiked(!previousLiked);
+    setLikeCount(
+      previousLiked ? Math.max(0, previousCount - 1) : previousCount + 1,
+    );
+
     try {
       await likePost(postId);
-      // Toggle the like status and update the count
-      setIsLiked(!isLiked);
-      setLikeCount(prev => (isLiked ? prev - 1 : prev + 1));
     } catch (error) {
+      setIsLiked(previousLiked);
+      setLikeCount(previousCount);
       console.error('Error liking post:', error);
       Toast.show({
         type: 'error',
@@ -195,247 +213,174 @@ const NewsCard: React.FC<NewsCardProps> = ({
 
   // Create a unified carousel for all attachment types (images, videos, PDFs)
   const renderAttachmentsCarousel = () => {
-    // Define type for attachment objects
     type Attachment = {
       type: 'image' | 'video' | 'pdf';
       uri: any;
     };
 
-    // Prepare an array of all attachments with their types
     const allAttachments: Attachment[] = [];
 
-    // Add single image if exists
-    if (imageUrl) {
-      // Check if this single image is actually a PDF (for backward compatibility)
-      const isPdf =
-        (typeof imageUrl === 'object' &&
-          imageUrl.uri?.toLowerCase().endsWith('.pdf')) ||
-        (typeof imageUrl === 'string' &&
-          imageUrl.toLowerCase().endsWith('.pdf'));
-
-      if (isPdf) {
-        // If it's a PDF, add it to the PDF section instead of image section
-        const pdfUri = typeof imageUrl === 'object' ? imageUrl.uri : imageUrl;
-        allAttachments.push({ type: 'pdf', uri: pdfUri });
-      } else {
-        allAttachments.push({ type: 'image', uri: imageUrl });
+    const pushImageOrPdf = (source: any) => {
+      if (!source) return;
+      if (typeof source === 'number') {
+        allAttachments.push({ type: 'image', uri: source });
+        return;
       }
-    }
-    // Add multiple images if exists
-    if (imageUrls && Array.isArray(imageUrls)) {
-      imageUrls.forEach(url => {
-        // Check if this image URL is actually a PDF (for backward compatibility)
-        const isPdf =
-          (typeof url === 'object' &&
-            url.uri?.toLowerCase().endsWith('.pdf')) ||
-          (typeof url === 'string' && url.toLowerCase().endsWith('.pdf'));
+      const uriStr = extractUriString(source);
+      if (!uriStr) return;
+      if (isPdfUri(uriStr)) {
+        allAttachments.push({ type: 'pdf', uri: uriStr });
+      } else {
+        allAttachments.push({
+          type: 'image',
+          uri: typeof source === 'string' ? { uri: uriStr } : source,
+        });
+      }
+    };
 
-        if (isPdf) {
-          const pdfUri = typeof url === 'object' ? url.uri : url;
-          allAttachments.push({ type: 'pdf', uri: pdfUri });
-        } else {
-          allAttachments.push({ type: 'image', uri: url });
-        }
-      });
+    const pushPdf = (source: any) => {
+      const uriStr = extractUriString(source);
+      if (uriStr && isPdfUri(uriStr)) {
+        allAttachments.push({ type: 'pdf', uri: uriStr });
+      }
+    };
+
+    pushImageOrPdf(imageUrl);
+    if (Array.isArray(imageUrls)) {
+      imageUrls.forEach(pushImageOrPdf);
     }
 
-    // Add single video if exists
     if (videoUrl) {
       allAttachments.push({ type: 'video', uri: videoUrl });
     }
-    // Add multiple videos if exists
-    if (videoUrls && Array.isArray(videoUrls)) {
-      videoUrls.forEach(url =>
-        allAttachments.push({ type: 'video', uri: url }),
-      );
+    if (Array.isArray(videoUrls)) {
+      videoUrls.forEach(url => allAttachments.push({ type: 'video', uri: url }));
     }
 
-    // Add single PDF if exists
-    if (
-      pdfUrl &&
-      typeof pdfUrl === 'object' &&
-      pdfUrl.uri?.toLowerCase().endsWith('.pdf')
-    ) {
-      allAttachments.push({ type: 'pdf', uri: pdfUrl.uri });
-    } else if (
-      pdfUrl &&
-      typeof pdfUrl === 'string' &&
-      pdfUrl.toLowerCase().endsWith('.pdf')
-    ) {
-      allAttachments.push({ type: 'pdf', uri: pdfUrl });
-    }
-    // Add multiple PDFs if exists
-    if (pdfUrls && Array.isArray(pdfUrls)) {
-      const pdfUrlsFromProps = pdfUrls
-        .filter(
-          item =>
-            item &&
-            typeof item === 'object' &&
-            item.uri &&
-            item.uri.toLowerCase().endsWith('.pdf'),
-        )
-        .map(item => item.uri);
-      pdfUrlsFromProps.forEach(url =>
-        allAttachments.push({ type: 'pdf', uri: url }),
-      );
+    pushPdf(pdfUrl);
+    if (Array.isArray(pdfUrls)) {
+      pdfUrls.forEach(pushPdf);
     }
 
-    // Remove duplicates while preserving order
     const uniqueAttachments: Attachment[] = [];
-    const seenUris = new Set();
+    const seenUris = new Set<string>();
     allAttachments.forEach(attachment => {
-      const uri = attachment.uri;
-      if (!seenUris.has(uri)) {
-        seenUris.add(uri);
+      const key =
+        typeof attachment.uri === 'number'
+          ? `asset:${attachment.uri}`
+          : extractUriString(attachment.uri);
+      if (key && !seenUris.has(key)) {
+        seenUris.add(key);
         uniqueAttachments.push(attachment);
       }
     });
 
-    // If we have no attachments, return null
     if (uniqueAttachments.length === 0) {
       return null;
     }
 
-    // Calculate item width to match container width
-    const itemWidth = width - moderateScale(32); // Account for margins (16 * 2)
+    const itemWidth = width - moderateScale(32);
 
-    // If we have only one attachment, still render it in the carousel container for consistency
-    // but without pagination indicators if there's only one item
-    if (uniqueAttachments.length === 1) {
-      const attachment = uniqueAttachments[0];
-      return (
-        <View style={cardStyles.carouselContainer}>
-          <FlatList
-            data={uniqueAttachments}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={itemWidth}
-            decelerationRate="fast"
-            onScroll={event => {
-              const contentOffset = event.nativeEvent.contentOffset.x;
-              const index = Math.round(contentOffset / itemWidth);
-              setCurrentIndex(index);
-            }}
-            renderItem={({ item }) => (
-              <View style={[cardStyles.carouselItem, { width: itemWidth }]}>
-                {item.type === 'image' && (
-                  <Image
-                    source={item.uri}
-                    style={cardStyles.carouselImage}
-                    resizeMode="cover"
+    const renderAttachmentItem = (item: Attachment) => (
+      <View style={[cardStyles.carouselItem, { width: itemWidth }]}>
+        {item.type === 'image' && (
+          <Image
+            source={item.uri}
+            style={cardStyles.carouselImage}
+            resizeMode="cover"
+          />
+        )}
+        {item.type === 'video' && (
+          <Video
+            source={item.uri}
+            style={cardStyles.carouselVideo}
+            resizeMode="contain"
+            controls={true}
+            repeat={false}
+            paused={true}
+            playWhenInactive={false}
+            playInBackground={false}
+          />
+        )}
+        {item.type === 'pdf' && (
+          <TouchableOpacity
+            style={cardStyles.pdfPreview}
+            onPress={() => openPDFViewer(item.uri)}
+          >
+            <View style={cardStyles.pdfPreviewContainer}>
+              <View style={cardStyles.pdfThumbnailArea}>
+                {!pdfError ? (
+                  <Pdf
+                    source={{ uri: item.uri }}
+                    trustAllCerts={false}
+                    style={cardStyles.pdfMiniView}
+                    page={1}
+                    scale={2.0}
+                    minScale={2.0}
+                    maxScale={2.0}
+                    enablePaging={false}
+                    singlePage={true}
+                    onLoadComplete={numberOfPages => {
+                      setPdfPages(numberOfPages);
+                      setPdfLoading(false);
+                    }}
+                    onError={error => {
+                      console.log('PDF preview error:', error);
+                      setPdfLoading(false);
+                      setPdfError(true);
+                    }}
                   />
+                ) : (
+                  <View style={cardStyles.pdfFallback}>
+                    <Text style={cardStyles.pdfFallbackIcon}>📄</Text>
+                    <Text style={cardStyles.pdfFallbackText}>PDF Preview</Text>
+                  </View>
                 )}
-                {item.type === 'video' && (
-                  <Video
-                    source={item.uri}
-                    style={cardStyles.carouselVideo}
-                    resizeMode="contain"
-                    controls={true}
-                    repeat={false}
-                    paused={false}
-                    playWhenInactive={false}
-                    playInBackground={false}
-                  />
-                )}
-                {item.type === 'pdf' && (
-                  <TouchableOpacity
-                    style={cardStyles.pdfPreview}
-                    onPress={() => openPDFViewer(item.uri)}
-                  >
-                    <View style={cardStyles.pdfPreviewContainer}>
-                      <View style={cardStyles.pdfThumbnailArea}>
-                        {!pdfError ? (
-                          <Pdf
-                            source={{ uri: item.uri }}
-                            trustAllCerts={false}
-                            style={cardStyles.pdfMiniView}
-                            page={1}
-                            scale={2.0}
-                            minScale={2.0}
-                            maxScale={2.0}
-                            enablePaging={false}
-                            singlePage={true}
-                            onLoadComplete={(numberOfPages, filePath) => {
-                              setPdfPages(numberOfPages);
-                              setPdfLoading(false);
-                              console.log(`PDF loaded: ${numberOfPages} pages`);
-                            }}
-                            onError={error => {
-                              console.log('PDF preview error:', error);
-                              setPdfLoading(false);
-                              setPdfError(true);
-                            }}
-                          />
-                        ) : (
-                          <View style={cardStyles.pdfFallback}>
-                            <Text style={cardStyles.pdfFallbackIcon}>📄</Text>
-                            <Text style={cardStyles.pdfFallbackText}>
-                              PDF Preview
-                            </Text>
-                          </View>
-                        )}
-                        {pdfLoading && !pdfError && (
-                          <View style={cardStyles.pdfLoadingContainer}>
-                            <ActivityIndicator size="small" color="#666" />
-                            <Text style={cardStyles.pdfLoadingText}>
-                              Loading PDF preview...
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={cardStyles.pdfInfoSection}>
-                        <View style={cardStyles.pdfHeader}>
-                          <View style={cardStyles.pdfIconContainer}>
-                            <Text style={cardStyles.pdfIcon}>📄</Text>
-                          </View>
-                          <View style={cardStyles.pdfDetails}>
-                            <Text
-                              style={cardStyles.pdfFileName}
-                              numberOfLines={1}
-                            >
-                              {item.uri.split('/').pop() || 'document.pdf'}
-                            </Text>
-                            <Text style={cardStyles.pdfMeta}>
-                              {pdfPages > 0
-                                ? `${pdfPages} page${pdfPages > 1 ? 's' : ''}`
-                                : 'PDF Document'}{' '}
-                              • Tap to view full document
-                            </Text>
-                          </View>
-                          <View style={cardStyles.pdfAction}>
-                            <Text style={cardStyles.pdfActionArrow}>→</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                {pdfLoading && !pdfError && (
+                  <View style={cardStyles.pdfLoadingContainer}>
+                    <ActivityIndicator size="small" color="#666" />
+                    <Text style={cardStyles.pdfLoadingText}>
+                      Loading PDF preview...
+                    </Text>
+                  </View>
                 )}
               </View>
-            )}
-            keyExtractor={(item, index) => `${index}-${item.type}`}
-          />
-          {/* Only show dots indicator if there's more than one item */}
-          {uniqueAttachments.length > 1 && (
-            <View style={cardStyles.dotsContainer}>
-              {uniqueAttachments.map((_, index) => (
-                <View
-                  key={index}
-                  style={[
-                    cardStyles.dot,
-                    {
-                      backgroundColor: index === currentIndex ? '#000' : '#ccc',
-                    },
-                  ]}
-                />
-              ))}
+              <View style={cardStyles.pdfInfoSection}>
+                <View style={cardStyles.pdfHeader}>
+                  <View style={cardStyles.pdfIconContainer}>
+                    <Text style={cardStyles.pdfIcon}>📄</Text>
+                  </View>
+                  <View style={cardStyles.pdfDetails}>
+                    <Text style={cardStyles.pdfFileName} numberOfLines={1}>
+                      {item.uri.split('?')[0].split('/').pop() ||
+                        'document.pdf'}
+                    </Text>
+                    <Text style={cardStyles.pdfMeta}>
+                      {pdfPages > 0
+                        ? `${pdfPages} page${pdfPages > 1 ? 's' : ''}`
+                        : 'PDF Document'}{' '}
+                      • Tap to view full document
+                    </Text>
+                  </View>
+                  <View style={cardStyles.pdfAction}>
+                    <Text style={cardStyles.pdfActionArrow}>→</Text>
+                  </View>
+                </View>
+              </View>
             </View>
-          )}
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+
+    if (uniqueAttachments.length === 1) {
+      return (
+        <View style={cardStyles.carouselContainer}>
+          {renderAttachmentItem(uniqueAttachments[0])}
         </View>
       );
     }
 
-    // Multiple attachments - render as unified carousel
     return (
       <View style={cardStyles.carouselContainer}>
         <FlatList
@@ -445,110 +390,18 @@ const NewsCard: React.FC<NewsCardProps> = ({
           showsHorizontalScrollIndicator={false}
           snapToInterval={itemWidth}
           decelerationRate="fast"
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          removeClippedSubviews={Platform.OS === 'android'}
           onScroll={event => {
             const contentOffset = event.nativeEvent.contentOffset.x;
             const index = Math.round(contentOffset / itemWidth);
             setCurrentIndex(index);
           }}
-          renderItem={({ item }) => (
-            <View style={[cardStyles.carouselItem, { width: itemWidth }]}>
-              {item.type === 'image' && (
-                <Image
-                  source={item.uri}
-                  style={cardStyles.carouselImage}
-                  resizeMode="cover"
-                />
-              )}
-              {item.type === 'video' && (
-                <Video
-                  source={item.uri}
-                  style={cardStyles.carouselVideo}
-                  resizeMode="contain"
-                  controls={true}
-                  repeat={false}
-                  paused={false}
-                  playWhenInactive={false}
-                  playInBackground={false}
-                />
-              )}
-              {item.type === 'pdf' && (
-                <TouchableOpacity
-                  style={cardStyles.pdfPreview}
-                  onPress={() => openPDFViewer(item.uri)}
-                >
-                  <View style={cardStyles.pdfPreviewContainer}>
-                    <View style={cardStyles.pdfThumbnailArea}>
-                      {!pdfError ? (
-                        <Pdf
-                          source={{ uri: item.uri }}
-                          trustAllCerts={false}
-                          style={cardStyles.pdfMiniView}
-                          page={1}
-                          scale={2.0}
-                          minScale={2.0}
-                          maxScale={2.0}
-                          enablePaging={false}
-                          singlePage={true}
-                          onLoadComplete={(numberOfPages, filePath) => {
-                            setPdfPages(numberOfPages);
-                            setPdfLoading(false);
-                            console.log(`PDF loaded: ${numberOfPages} pages`);
-                          }}
-                          onError={error => {
-                            console.log('PDF preview error:', error);
-                            setPdfLoading(false);
-                            setPdfError(true);
-                          }}
-                        />
-                      ) : (
-                        <View style={cardStyles.pdfFallback}>
-                          <Text style={cardStyles.pdfFallbackIcon}>📄</Text>
-                          <Text style={cardStyles.pdfFallbackText}>
-                            PDF Preview
-                          </Text>
-                        </View>
-                      )}
-                      {pdfLoading && !pdfError && (
-                        <View style={cardStyles.pdfLoadingContainer}>
-                          <ActivityIndicator size="small" color="#666" />
-                          <Text style={cardStyles.pdfLoadingText}>
-                            Loading PDF preview...
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={cardStyles.pdfInfoSection}>
-                      <View style={cardStyles.pdfHeader}>
-                        <View style={cardStyles.pdfIconContainer}>
-                          <Text style={cardStyles.pdfIcon}>📄</Text>
-                        </View>
-                        <View style={cardStyles.pdfDetails}>
-                          <Text
-                            style={cardStyles.pdfFileName}
-                            numberOfLines={1}
-                          >
-                            {item.uri.split('/').pop() || 'document.pdf'}
-                          </Text>
-                          <Text style={cardStyles.pdfMeta}>
-                            {pdfPages > 0
-                              ? `${pdfPages} page${pdfPages > 1 ? 's' : ''}`
-                              : 'PDF Document'}{' '}
-                            • Tap to view full document
-                          </Text>
-                        </View>
-                        <View style={cardStyles.pdfAction}>
-                          <Text style={cardStyles.pdfActionArrow}>→</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+          renderItem={({ item }) => renderAttachmentItem(item)}
           keyExtractor={(item, index) => `${index}-${item.type}`}
         />
-        {/* Dots indicator */}
         <View style={cardStyles.dotsContainer}>
           {uniqueAttachments.map((_, index) => (
             <View
@@ -564,89 +417,10 @@ const NewsCard: React.FC<NewsCardProps> = ({
     );
   };
 
-  // Render single PDF (used for single PDF or in carousel)
-  const renderSinglePDF = (pdfUri: string) => {
-    const fileName = pdfUri.split('/').pop() || 'document.pdf';
-
-    return (
-      <View style={cardStyles.pdfContainer}>
-        <TouchableOpacity
-          style={cardStyles.pdfPreview}
-          onPress={() => openPDFViewer(pdfUri)}
-        >
-          <View style={cardStyles.pdfPreviewContainer}>
-            <View style={cardStyles.pdfThumbnailArea}>
-              {!pdfError ? (
-                <Pdf
-                  source={{ uri: pdfUri }}
-                  trustAllCerts={false}
-                  style={cardStyles.pdfMiniView}
-                  page={1}
-                  scale={2.0}
-                  minScale={2.0}
-                  maxScale={2.0}
-                  enablePaging={false}
-                  singlePage={true}
-                  onLoadComplete={(numberOfPages, filePath) => {
-                    setPdfPages(numberOfPages);
-                    setPdfLoading(false);
-                    console.log(`PDF loaded: ${numberOfPages} pages`);
-                  }}
-                  onError={error => {
-                    console.log('PDF preview error:', error);
-                    setPdfLoading(false);
-                    setPdfError(true);
-                  }}
-                />
-              ) : (
-                <View style={cardStyles.pdfFallback}>
-                  <Text style={cardStyles.pdfFallbackIcon}>📄</Text>
-                  <Text style={cardStyles.pdfFallbackText}>PDF Preview</Text>
-                </View>
-              )}
-
-              {pdfLoading && !pdfError && (
-                <View style={cardStyles.pdfLoadingContainer}>
-                  <ActivityIndicator size="small" color="#666" />
-                  <Text style={cardStyles.pdfLoadingText}>
-                    Loading PDF preview...
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={cardStyles.pdfInfoSection}>
-              <View style={cardStyles.pdfHeader}>
-                <View style={cardStyles.pdfIconContainer}>
-                  <Text style={cardStyles.pdfIcon}>📄</Text>
-                </View>
-                <View style={cardStyles.pdfDetails}>
-                  <Text style={cardStyles.pdfFileName} numberOfLines={1}>
-                    {fileName}
-                  </Text>
-                  <Text style={cardStyles.pdfMeta}>
-                    {pdfPages > 0
-                      ? `${pdfPages} page${pdfPages > 1 ? 's' : ''}`
-                      : 'PDF Document'}{' '}
-                    • Tap to view full document
-                  </Text>
-                </View>
-                <View style={cardStyles.pdfAction}>
-                  <Text style={cardStyles.pdfActionArrow}>→</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const openPDFViewer = (pdfUrl: string) => {
-    // Try using the navigation object directly
+  const openPDFViewer = (targetPdfUrl: string) => {
     navigation.navigate('PDFViewer', {
-      pdfUrl,
-      title: pdfUrl.split('/').pop(),
+      pdfUrl: targetPdfUrl,
+      title: targetPdfUrl.split('?')[0].split('/').pop(),
     });
   };
 
@@ -804,7 +578,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
   );
 };
 
-export default NewsCard;
+export default React.memo(NewsCard);
 
 const cardStyles = StyleSheet.create({
   container: {

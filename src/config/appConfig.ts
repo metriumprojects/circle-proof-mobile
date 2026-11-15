@@ -17,10 +17,13 @@ const DEV_API_URL = Platform.select({
   default: 'http://localhost:8000/api',
 });
 
+const API_BASE_URL = 'https://circle-proof-api-1.onrender.com/api';
+
 export const APP_CONFIG = {
   // Toggle between __DEV__ or your custom remote server
-  API_BASE_URL: 'https://circle-proof-api-1.onrender.com/api',
+  API_BASE_URL,
   REMOTE_API_URL: 'https://circle-proof-api-1.onrender.com/api',
   DEV_API_URL: DEV_API_URL,
+  SOCKET_URL: API_BASE_URL.replace(/\/api\/?$/, ''),
   CLERK_PUBLISHABLE_KEY: 'pk_test_cHJvLXlldGktMTk5Ny5jbGVyay5hY2NvdW50cy5kZXYk',
 };

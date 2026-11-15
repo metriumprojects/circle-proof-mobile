@@ -21,7 +21,8 @@ import {
   requestVerification,
   fetchMasterSkillList,
   sendHRVerificationRequest,
-  addMasterSkill
+  addMasterSkill,
+  searchUsers,
 } from '../../api/service';
 import { CountryPicker } from 'react-native-country-codes-picker';
 
@@ -208,6 +209,9 @@ const VerificationStep2 = () => {
   const [loadingStates, setLoadingStates] = useState<{
     [key: number]: boolean;
   }>({});
+  const [userSuggestions, setUserSuggestions] = useState<{
+    [key: number]: any[];
+  }>({});
 
   // State for skills selection
   const [skills, setSkills] = useState<any[]>([]);
@@ -323,6 +327,26 @@ const VerificationStep2 = () => {
     setInvitations(prev =>
       prev.map(inv => (inv.id === id ? { ...inv, [field]: value } : inv)),
     );
+  };
+
+  const handleEmailSearchChange = async (invitationId: number, text: string) => {
+    updateInvitation(invitationId, 'email', text);
+    const trimmed = text.trim();
+    if (trimmed.length < 2 || trimmed.includes('@')) {
+      setUserSuggestions(prev => ({ ...prev, [invitationId]: [] }));
+      return;
+    }
+    try {
+      const res = await searchUsers(trimmed);
+      const users =
+        res.data?.data?.users || res.data?.users || res.data?.data || [];
+      setUserSuggestions(prev => ({
+        ...prev,
+        [invitationId]: Array.isArray(users) ? users.slice(0, 5) : [],
+      }));
+    } catch (_) {
+      setUserSuggestions(prev => ({ ...prev, [invitationId]: [] }));
+    }
   };
 
   const updateHrRequest = (id: number, field: string, value: string) => {
@@ -600,22 +624,6 @@ const VerificationStep2 = () => {
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`).catch(() => {
       Share.share({ message: text });
     });
-  };
-
-  const sendAllInvitations = async () => {
-    const validInvitations = invitations.filter(inv => inv.email.trim() && !inv.sent);
-    if (validInvitations.length === 0) {
-      Toast.show({
-        type: 'info',
-        text1: 'Notice',
-        text2: 'Please enter an email address for unsent invitations',
-      });
-      return;
-    }
-
-    for (const inv of validInvitations) {
-      await sendInvitation(inv.id);
-    }
   };
 
   const renderSelectedItem = () => {
@@ -910,7 +918,7 @@ const VerificationStep2 = () => {
     });
   };
 
-  const renderInvitationForm = (invitation: InvitationItem, index: number) => {
+  const renderInvitationForm = (invitation: InvitationItem, _index: number) => {
     const currentSelectedSkills = invitation.selectedSkills || [];
 
     return (
@@ -920,14 +928,59 @@ const VerificationStep2 = () => {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.emailInput}
-            placeholder="paul@google.com"
+            placeholder="Search by name or enter email..."
             value={invitation.email}
-            onChangeText={text =>
-              updateInvitation(invitation.id, 'email', text)
-            }
+            onChangeText={text => handleEmailSearchChange(invitation.id, text)}
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {(userSuggestions[invitation.id]?.length ?? 0) > 0 && (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: '#e5e7eb',
+                borderRadius: 8,
+                backgroundColor: '#fff',
+                marginTop: 4,
+                overflow: 'hidden',
+              }}
+            >
+              {userSuggestions[invitation.id].map((u: any) => (
+                <TouchableOpacity
+                  key={u.id || u._id || u.email}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#f3f4f6',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  onPress={() => {
+                    if (u.email) {
+                      updateInvitation(invitation.id, 'email', u.email);
+                    }
+                    setUserSuggestions(prev => ({
+                      ...prev,
+                      [invitation.id]: [],
+                    }));
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
+                      {u.fullName || u.name || 'User'}
+                    </Text>
+                    {!!u.email && (
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                        {u.email}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         <Text style={styles.messageLabel}>Custom message (optional)</Text>

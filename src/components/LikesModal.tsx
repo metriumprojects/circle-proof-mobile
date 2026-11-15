@@ -1,5 +1,5 @@
 // LikesModal.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,13 +34,13 @@ const moderateScale = (size: number, factor = 0.5) =>
 interface LikesModalProps {
   visible: boolean;
   onClose: () => void;
-  postId?: number; // Add postId prop to fetch real data
-  timelineId?: number; // Add timelineId prop to fetch timeline likes
-  educationId?: number; // Add educationId prop to fetch education likes
-  skillId?: number; // Add skillId prop to fetch skill likes
-  hobbyId?: number; // Add hobbyId prop to fetch hobby likes
-  aspirationId?: number; // Add aspirationId prop to fetch aspiration likes
-  achievementId?: number; // Add achievementId prop to fetch achievement likes
+  postId?: number | string; // Add postId prop to fetch real data
+  timelineId?: number | string; // Add timelineId prop to fetch timeline likes
+  educationId?: number | string; // Add educationId prop to fetch education likes
+  skillId?: number | string; // Add skillId prop to fetch skill likes
+  hobbyId?: number | string; // Add hobbyId prop to fetch hobby likes
+  aspirationId?: number | string; // Add aspirationId prop to fetch aspiration likes
+  achievementId?: number | string; // Add achievementId prop to fetch achievement likes
   entityType?: string;
 }
 
@@ -89,45 +89,7 @@ const LikesModal: React.FC<LikesModalProps> = ({
     }
   };
 
-  // Fetch likes data when modal is opened and postId or timelineId is available
-  useEffect(() => {
-    if (
-      visible &&
-      (postId ||
-        timelineId ||
-        educationId ||
-        skillId ||
-        hobbyId ||
-        aspirationId ||
-        achievementId)
-    ) {
-      fetchLikes();
-    } else if (
-      visible &&
-      !postId &&
-      !timelineId &&
-      !educationId &&
-      !skillId &&
-      !hobbyId &&
-      !aspirationId &&
-      !achievementId
-    ) {
-      // If no postId or timelineId, set an empty array
-      setLikesData([]);
-    }
-  }, [
-    visible,
-    postId,
-    timelineId,
-    educationId,
-    skillId,
-    hobbyId,
-    aspirationId,
-    achievementId,
-    entityType,
-  ]);
-
-  const fetchLikes = async () => {
+  const fetchLikes = useCallback(async () => {
     if (
       !postId &&
       !timelineId &&
@@ -187,10 +149,58 @@ const LikesModal: React.FC<LikesModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    postId,
+    timelineId,
+    educationId,
+    skillId,
+    hobbyId,
+    aspirationId,
+    achievementId,
+    entityType,
+  ]);
+
+  // Fetch likes data when modal is opened and postId or timelineId is available
+  useEffect(() => {
+    if (
+      visible &&
+      (postId ||
+        timelineId ||
+        educationId ||
+        skillId ||
+        hobbyId ||
+        aspirationId ||
+        achievementId)
+    ) {
+      fetchLikes();
+    } else if (
+      visible &&
+      !postId &&
+      !timelineId &&
+      !educationId &&
+      !skillId &&
+      !hobbyId &&
+      !aspirationId &&
+      !achievementId
+    ) {
+      // If no postId or timelineId, set an empty array
+      setLikesData([]);
+    }
+  }, [
+    visible,
+    postId,
+    timelineId,
+    educationId,
+    skillId,
+    hobbyId,
+    aspirationId,
+    achievementId,
+    entityType,
+    fetchLikes,
+  ]);
 
   const handleToggleFollow = async (
-    userId: number,
+    userId: number | string,
     currentlyFollowing: boolean,
   ) => {
     try {

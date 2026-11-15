@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   Modal,
   ActivityIndicator,
 } from 'react-native';
@@ -24,7 +23,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 
 // Define the type for profile stats
 interface ProfileStats {
-  userId: number;
+  userId: number | string;
   fullName: string;
   username: string | null;
   profilePicture: string | null;
@@ -43,8 +42,6 @@ interface ProfileStats {
   verificationsReceived: number;
   verificationsGiven: number;
 }
-
-const { width, height } = Dimensions.get('window');
 
 // Custom Confirmation Modal Component
 interface ConfirmationModalProps {
@@ -125,8 +122,7 @@ const ProfileScreen = () => {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [mainImageLoading, setMainImageLoading] = useState(true);
-  const [userId, setUserId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<number | string | null>(null);
 
   // Confirmation modal states
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);

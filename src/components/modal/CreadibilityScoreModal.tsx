@@ -6,21 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  Dimensions,
   Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-
-const { width, height } = Dimensions.get('window');
-
-// Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
-const guidelineBaseHeight = 812;
-
-const scale = (size: number) => (width / guidelineBaseWidth) * size;
-const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
-const moderateScale = (size: number, factor = 0.5) =>
-  size + (scale(size) - size) * factor;
 
 interface CredibilityScoreModalProps {
   visible: boolean;

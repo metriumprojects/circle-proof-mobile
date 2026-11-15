@@ -1,9 +1,17 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from 'react';
 import {
   getStoredToken,
   getStoredUserData,
   clearAuthData,
   isAuthenticated as checkIsAuthenticated,
+  setClerkTokenProvider,
   storeAuthData,
 } from '../util/authController';
 import { useAuth as useClerkAuth, useUser as useClerkUser } from '@clerk/clerk-expo';
@@ -33,6 +41,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const clerkAuth = useClerkAuth();
   const clerkUser = useClerkUser();
+  const getClerkTokenRef = useRef(clerkAuth.getToken);
+  getClerkTokenRef.current = clerkAuth.getToken;
+
+  useEffect(() => {
+    if (clerkAuth.isLoaded && clerkAuth.isSignedIn) {
+      setClerkTokenProvider(() => getClerkTokenRef.current());
+    } else {
+      setClerkTokenProvider(null);
+    }
+    return () => {
+      setClerkTokenProvider(null);
+    };
+  }, [clerkAuth.isLoaded, clerkAuth.isSignedIn]);
 
   const login = async (newToken: string, userData: any) => {
     setToken(newToken);
@@ -49,6 +70,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (e) {
       console.warn('[AuthContext] Error during Clerk signOut:', e);
     }
+    setClerkTokenProvider(null);
     await clearAuthData();
     setToken(null);
     setUser(null);
@@ -106,7 +128,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(null);
           setIsAuthenticated(false);
         }
-      } catch (error) {
+      } catch {
         if (!isCancelled) {
           setToken(null);
           setUser(null);
@@ -122,6 +144,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       isCancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clerkAuth.isLoaded, clerkAuth.isSignedIn, clerkAuth.userId, clerkUser.user]);
 
   const checkAuthStatus = async () => {
@@ -133,7 +156,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
           return;
         }
-      } catch (e) {}
+      } catch {
+        // Fallback to stored auth data below
+      }
     }
 
     try {

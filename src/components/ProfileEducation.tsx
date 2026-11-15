@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  TextInput,
-  FlatList,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AddModal from './modal/AddModal';
@@ -19,16 +17,14 @@ import {
   getEducationByid,
   getEducationAchievementById,
   addEducationLikesUnlike,
-  getSchoolList,
 } from '../api/service';
 import CommentsModal from './CommentsModal';
 import LikesModal from './LikesModal';
 import ValidationsListModal from './modal/ValidationsListModal';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 // Base dimensions (iPhone 11)
-const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
 const verticalScale = (size: number) => (height / guidelineBaseHeight) * size;
@@ -179,7 +175,9 @@ const ProfileEducation = () => {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [currentItemId, setCurrentItemId] = useState<number | string | null>(
+    null,
+  );
   const [currentItemType, setCurrentItemType] = useState<string | null>(null);
   const [expandedDescriptions, setExpandedDescriptions] = useState<{
     [key: number]: boolean;
@@ -195,21 +193,24 @@ const ProfileEducation = () => {
     hasPrev: false,
   });
   const [showDraft, setShowDraft] = useState(false);
-  const [switchingTabs, setSwitchingTabs] = useState(false);
   const navigation = useNavigation<any>();
 
-  const handleStatsPress = (id: number, type: string) => {
+  const handleStatsPress = (id: number | string, type: string) => {
     setCurrentItemId(id);
     setCurrentItemType(type);
   };
 
   const updateCommentCount = useCallback(
-    (itemId: number, increment: number, type: string = 'education') => {
+    (
+      itemId: number | string,
+      increment: number,
+      type: string = 'education',
+    ) => {
       setEducationGroups(prevGroups => {
         return prevGroups.map(group => ({
           ...group,
           educationEntries: group.educationEntries.map(entry => {
-            if (type === 'education' && entry.id === itemId) {
+            if (type === 'education' && String(entry.id) === String(itemId)) {
               return {
                 ...entry,
                 stats: {
@@ -228,7 +229,7 @@ const ProfileEducation = () => {
             ) {
               const updatedAchievements = entry.achievements.map(
                 achievement => {
-                  if (Number(achievement.id) === Number(itemId)) {
+                  if (String(achievement.id) === String(itemId)) {
                     return {
                       ...achievement,
                       stats: {
@@ -246,7 +247,7 @@ const ProfileEducation = () => {
 
               // Check if any achievement was actually updated
               const isAchievementUpdated = entry.achievements.some(
-                ach => Number(ach.id) === Number(itemId),
+                ach => String(ach.id) === String(itemId),
               );
 
               if (isAchievementUpdated) {
@@ -264,7 +265,7 @@ const ProfileEducation = () => {
     [],
   );
 
-  const fetchEducation = async (page: number = 1) => {
+  const fetchEducation = useCallback(async (page: number = 1) => {
     try {
       if (page === 1) {
         setLoading(true);
@@ -291,13 +292,10 @@ const ProfileEducation = () => {
     } catch (error) {
       console.error('Error fetching education data:', error);
     } finally {
-      if (loadingMore) {
-        setLoadingMore(false);
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, []);
 
   const loadMoreEducation = async () => {
     if (pagination.hasNext && !loadingMore) {
@@ -445,7 +443,7 @@ const ProfileEducation = () => {
 
   useEffect(() => {
     fetchEducation(1);
-  }, []);
+  }, [fetchEducation]);
 
   const handleSelect = (selected: any) => {
     console.log('Selected:', selected);
@@ -1755,7 +1753,7 @@ const ProfileEducation = () => {
           setIsAddSchoolModalOpen(false);
           setIsUniversalModalOpen(true); // Re-open the universal form after closing add school modal
         }}
-        onSchoolAdded={school => {
+        onSchoolAdded={_school => {
           // Refresh the school list in the universal form modal to include the newly added school
           // This will be handled by the getSchoolList API call in UniversalFormModal
           setIsAddSchoolModalOpen(false);

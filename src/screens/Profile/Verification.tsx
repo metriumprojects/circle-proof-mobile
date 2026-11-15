@@ -189,22 +189,9 @@ interface AspirationVerificationData {
   achievements?: Achievement[];
 }
 
-// Define the interface for position details response
-interface PositionDetailsResponse {
-  code: number;
-  success: boolean;
-  message: string;
-  data: {
-    position: Position & {
-      company: Company;
-    };
-  };
-  error: string | null;
-}
-
 const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
   const createUniqueId = (
-    id: number,
+    id: number | string,
     type:
       | 'position'
       | 'achievement'
@@ -214,7 +201,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
       | 'aspiration',
   ) => `${type}-${id}`;
 
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [, setSelectedItem] = useState<string | null>(null);
   const [companyData, setCompanyData] =
     useState<CompanyVerificationData | null>(null);
   const [educationData, setEducationData] =
@@ -244,22 +231,20 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     isHobbyEntry,
     isSkill,
     isAspiration,
-    masterHobbyId,
   } = (route.params || {}) as {
-    companyId?: number;
-    schoolId?: number;
-    educationId?: number;
-    achievementId?: number;
-    hobbyId?: number;
-    skillId?: number;
-    aspirationId?: number;
+    companyId?: number | string;
+    schoolId?: number | string;
+    educationId?: number | string;
+    achievementId?: number | string;
+    hobbyId?: number | string;
+    skillId?: number | string;
+    aspirationId?: number | string;
     isPosition?: boolean;
     isAchievement?: boolean;
     isHobbyGroup?: boolean;
     isHobbyEntry?: boolean;
     isSkill?: boolean;
     isAspiration?: boolean;
-    masterHobbyId?: number;
   };
 
   useEffect(() => {
@@ -309,6 +294,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
       // If aspirationId is provided and isAspiration flag is true, fetch aspiration data
       fetchAspirationDetails(aspirationId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     companyId,
     schoolId,
@@ -326,8 +312,8 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
   ]);
 
   const fetchSectionAchievementDetails = async (
-    achievementId: number,
-    parentId: number,
+    achievementId: number | string,
+    parentId: number | string,
     type: 'skill' | 'hobby' | 'aspiration',
   ) => {
     console.log(type, 'type 1223');
@@ -424,7 +410,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchHobbyGroupDetails = async (id: number) => {
+  const fetchHobbyGroupDetails = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -513,7 +499,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchHobbyEntryDetails = async (id: number) => {
+  const fetchHobbyEntryDetails = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -554,7 +540,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchEducationById = async (id: number) => {
+  const fetchEducationById = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -597,7 +583,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchEducationAchievementById = async (id: number) => {
+  const fetchEducationAchievementById = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -642,7 +628,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchEducationVerificationList = async (id: number) => {
+  const fetchEducationVerificationList = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -683,7 +669,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchCompanyVerificationList = async (id: number) => {
+  const fetchCompanyVerificationList = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -723,7 +709,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchPositionDetails = async (positionId: number) => {
+  const fetchPositionDetails = async (positionId: number | string) => {
     console.log(positionId, 'position id');
     try {
       setLoading(true);
@@ -773,7 +759,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchAchievementDetails = async (achievementId: number) => {
+  const fetchAchievementDetails = async (achievementId: number | string) => {
     console.log(achievementId, 'achievement id');
     try {
       setLoading(true);
@@ -825,7 +811,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchSkillDetails = async (id: number) => {
+  const fetchSkillDetails = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -862,7 +848,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     }
   };
 
-  const fetchAspirationDetails = async (id: number) => {
+  const fetchAspirationDetails = async (id: number | string) => {
     try {
       setLoading(true);
       setError(null);
@@ -1404,66 +1390,6 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
     );
   };
 
-  const renderAspirationCard = (aspiration: Aspiration) => {
-    const itemUniqueId = createUniqueId(aspiration.id, 'aspiration');
-    const isSelected = selectedItems.includes(itemUniqueId);
-
-    return (
-      <TouchableOpacity
-        key={itemUniqueId}
-        style={[
-          verificationStyles.card,
-          isSelected && verificationStyles.selectedCard,
-        ]}
-        onPress={() => handleSelect(aspiration.id, 'aspiration')}
-      >
-        {/* Aspiration Info */}
-        <View style={verificationStyles.companyInfo}>
-          <View style={verificationStyles.companyLogo}>
-            <Text style={verificationStyles.companyInitial}>🎯</Text>
-          </View>
-          <View style={verificationStyles.companyDetails}>
-            <Text
-              style={[
-                verificationStyles.achievementTitle,
-                isSelected && verificationStyles.selectedText,
-              ]}
-            >
-              {aspiration.goal}
-            </Text>
-            <View style={verificationStyles.dateContainer}>
-              <Image
-                source={require('../../assets/icons/calendar.png')}
-                style={[
-                  verificationStyles.calendarIcon,
-                  isSelected && verificationStyles.selectedIcon,
-                ]}
-              />
-              <Text
-                style={[
-                  verificationStyles.dateText,
-                  isSelected && verificationStyles.selectedText,
-                ]}
-              >
-                {aspiration.dateRange}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Description */}
-        <Text
-          style={[
-            verificationStyles.description,
-            isSelected && verificationStyles.selectedText,
-          ]}
-        >
-          {aspiration.whyItMatters}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
   if (loading) {
     return (
       <View style={verificationStyles.loadingContainer}>
@@ -1719,11 +1645,11 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
 
                     if (type === 'education') {
                       itemData = educationData.educations.find(
-                        e => e.id === parseInt(id),
+                        e => String(e.id) === String(id),
                       );
                     } else {
                       itemData = educationData.achievements.find(
-                        a => a.id === parseInt(id),
+                        a => String(a.id) === String(id),
                       );
                     }
 
@@ -2054,11 +1980,11 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
 
                     if (type === 'hobby') {
                       itemData = hobbyData.entries.find(
-                        h => h.id === parseInt(id),
+                        h => String(h.id) === String(id),
                       );
                     } else if (type === 'achievement') {
                       itemData = hobbyData.achievements?.find(
-                        a => a.id === parseInt(id),
+                        a => String(a.id) === String(id),
                       );
                     }
 
@@ -2245,7 +2171,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
                       const [type, id] = uniqueId.split('-');
                       if (type === 'achievement') {
                         const itemData = skillData.achievements?.find(
-                          a => a.id === parseInt(id),
+                          a => String(a.id) === String(id),
                         );
                         if (itemData) {
                           return {
@@ -2454,7 +2380,7 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
                     const [type, id] = uniqueId.split('-');
                     if (type === 'aspiration_achievement') {
                       const itemData = aspirationData.achievements?.find(
-                        a => a.id === parseInt(id),
+                        a => String(a.id) === String(id),
                       );
                       if (itemData) {
                         return {
@@ -2768,11 +2694,11 @@ const VerificationSelectionSystem = ({ navigation }: { navigation: any }) => {
 
                     if (type === 'position') {
                       itemData = companyData.positions.find(
-                        p => p.id === parseInt(id),
+                        p => String(p.id) === String(id),
                       );
                     } else {
                       itemData = companyData.achievements.find(
-                        a => a.id === parseInt(id),
+                        a => String(a.id) === String(id),
                       );
                     }
 
