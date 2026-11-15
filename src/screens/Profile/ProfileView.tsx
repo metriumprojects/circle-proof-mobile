@@ -43,6 +43,7 @@ const ProfileView = () => {
   const [verificationsModalVisible, setVerificationsModalVisible] =
     useState(false);
   const [loading, setLoading] = useState(true);
+  const [avatarError, setAvatarError] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -57,6 +58,7 @@ const ProfileView = () => {
         const response = await fetchSpecificUserProfileStats(userId);
         if (response.data.success) {
           setProfileData(response.data.data.stats);
+          setAvatarError(false);
         } else {
           console.error(
             'Failed to fetch profile stats:',
@@ -128,12 +130,14 @@ const ProfileView = () => {
           <View style={styles.header}>
             <View style={styles.profileImageContainer}>
               <Image
-                source={{
-                  uri: profileData?.profilePicture
-                    ? profileData.profilePicture
-                    : 'https://fastly.picsum.photos/id/513/4373/3280.jpg?hmac=LkZSEFr5H-jsaqmKTdANAlVWv6Zb38bDJxz5jQEyU0g',
-                }}
+                source={
+                  profileData?.profilePicture && !avatarError
+                    ? { uri: profileData.profilePicture }
+                    : require('../../assets/images/dp.jpg')
+                }
                 style={styles.profileImage}
+                defaultSource={require('../../assets/images/dp.jpg')}
+                onError={() => setAvatarError(true)}
               />
             </View>
           </View>

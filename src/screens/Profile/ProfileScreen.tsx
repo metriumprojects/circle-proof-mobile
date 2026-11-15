@@ -122,6 +122,7 @@ const ProfileScreen = () => {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const [userId, setUserId] = useState<number | string | null>(null);
 
   // Confirmation modal states
@@ -141,6 +142,7 @@ const ProfileScreen = () => {
       const response = await fetchProfileStats();
       if (response.data.success) {
         setProfileData(response.data.data.stats);
+        setAvatarError(false);
         setUserId(response.data.data.stats.userId);
       } else {
         console.error('Failed to fetch profile stats:', response.data.message);
@@ -413,14 +415,13 @@ const ProfileScreen = () => {
             <View style={styles.uploadModalContent}>
               <View style={styles.previewContainer}>
                 <Image
-                  source={{
-                    uri:
-                      selectedImage ||
-                      (profileData?.profilePicture
-                        ? `${profileData.profilePicture}${profileData.profilePicture.includes('?') ? '&' : '?'
-                        }t=${Date.now()}`
-                        : 'https://fastly.picsum.photos/id/513/4373/3280.jpg?hmac=LkZSEFr5H-jsaqmKTdANAlVWv6Zb38bDJxz5jQEyU0g'),
-                  }}
+                  source={
+                    selectedImage
+                      ? { uri: selectedImage }
+                      : profileData?.profilePicture && !avatarError
+                        ? { uri: profileData.profilePicture }
+                        : require('../../assets/images/dp.jpg')
+                  }
                   style={styles.previewImage}
                   key={
                     selectedImage || profileData?.profilePicture || 'default'
@@ -466,19 +467,19 @@ const ProfileScreen = () => {
           <View style={styles.header}>
             <View style={styles.profileImageContainer}>
               <Image
-                source={{
-                  uri: profileData?.profilePicture
-                    ? `${profileData.profilePicture}${profileData.profilePicture.includes('?') ? '&' : '?'
-                    }t=${Date.now()}`
-                    : 'https://fastly.picsum.photos/id/513/4373/3280.jpg?hmac=LkZSEFr5H-jsaqmKTdANAlVWv6Zb38bDJxz5jQEyU0g',
-                }}
+                source={
+                  profileData?.profilePicture && !avatarError
+                    ? { uri: profileData.profilePicture }
+                    : require('../../assets/images/dp.jpg')
+                }
                 style={styles.profileImage}
                 key={
-                  profileData?.profilePicture
+                  profileData?.profilePicture && !avatarError
                     ? profileData.profilePicture
                     : 'default'
                 }
                 defaultSource={require('../../assets/images/dp.jpg')}
+                onError={() => setAvatarError(true)}
               />
               <TouchableOpacity
                 style={styles.editIconContainer}

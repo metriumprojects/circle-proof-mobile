@@ -93,9 +93,14 @@ const NewsCard: React.FC<NewsCardProps> = ({
   const [pdfLoading, setPdfLoading] = React.useState(true);
   const [pdfPages, setPdfPages] = React.useState(0);
   const [pdfError, setPdfError] = React.useState(false);
+  const [avatarError, setAvatarError] = React.useState(false);
   const [commentCount, setCommentCount] = React.useState(
     stats?.commentsCount || 0,
   ); // Local comment count state
+
+  React.useEffect(() => {
+    setAvatarError(false);
+  }, [postId, profilePicture]);
 
   React.useEffect(() => {
     setIsLiked(initialLikeStatus);
@@ -431,10 +436,11 @@ const NewsCard: React.FC<NewsCardProps> = ({
           <TouchableOpacity
             onPress={() => navigation.navigate('ProfileView', { userId })}
           >
-            {profilePicture ? (
+            {profilePicture && !avatarError ? (
               <Image
                 source={{ uri: profilePicture }}
                 style={cardStyles.avatar}
+                onError={() => setAvatarError(true)}
               />
             ) : (
               <View style={cardStyles.avatar}>
