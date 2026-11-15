@@ -38,7 +38,17 @@
     }
   },
   "submit": {
-    "production": {},
-    "testflight": {}
+    "production": {
+      "ios": {
+        "appleId": "metrium.projects@gmail.com",
+        "appleTeamId": "8244GB6YJZ",
+        "appName": "circleProof",
+        "sku": "circleproof-ios",
+        "language": "en-US"
+      }
+    },
+    "testflight": {
+      "extends": "production"
+    }
   }
 }
