@@ -56,16 +56,13 @@ const HomeFeedBox = () => {
     navigation.dispatch(CommonActions.navigate('Post'));
   };
 
-  // Determine the image source with fallback
+  // Determine the image source with fallback without mutating signed query parameters
   const getImageSource = () => {
     if (imageError || !profileImage) {
-      // Fallback to static image if profile image fails to load or is not available
-      return require('../assets/images/dp.jpg'); // Using dp.jpg as fallback from assets/images
+      return require('../assets/images/dp.jpg');
     }
 
-    // Use the profile image with cache busting to ensure fresh image
-    const imageUrl = `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${Date.now()}`;
-    return { uri: imageUrl };
+    return { uri: profileImage };
   };
 
   return (
