@@ -15,7 +15,9 @@
     "build-android": "npx react-native build-android --mode=release",
     "eas:preview": "eas build -p android --profile preview",
     "eas:prod": "eas build -p android --profile production",
-    "eas:playstore": "eas build -p android --profile production-aab"
+    "eas:playstore": "eas build -p android --profile production-aab",
+    "eas:ios-testflight": "eas build -p ios --profile testflight --auto-submit",
+    "eas:ios-submit": "eas submit -p ios --latest"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.20.1",
