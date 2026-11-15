@@ -1,6 +1,9 @@
 {
   "name": "circleProof",
   "displayName": "circleProof",
+  "ios": {
+    "bundleIdentifier": "com.metriumprojects.circleproof"
+  },
   "extra": {
     "eas": {
       "projectId": "5f6f5d57-66b9-40e7-90b7-5dbf6bc5baed"

@@ -16,6 +16,7 @@
     "eas:preview": "eas build -p android --profile preview",
     "eas:prod": "eas build -p android --profile production",
     "eas:playstore": "eas build -p android --profile production-aab",
+    "eas:ios-build": "eas build -p ios --profile testflight",
     "eas:ios-testflight": "eas build -p ios --profile testflight --auto-submit",
     "eas:ios-submit": "eas submit -p ios --latest"
   },
